@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Торговец</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d0f16; overflow: hidden; }
+      body { display: flex; flex-direction: column; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cdd6ff; }
+      #map { display: block; flex: 0 0 auto; cursor: grab; touch-action: none; }
+      #map.drag { cursor: grabbing; }
+      #hud {
+        position: fixed; top: 10px; left: 12px; pointer-events: none; user-select: none;
+        color: #8f9ac4; text-shadow: 0 1px 2px rgba(0,0,0,.9);
+      }
+      #hud b { color: #ffd76e; font-weight: 600; }
+      #strip {
+        flex: 0 0 var(--strip, 220px); height: var(--strip, 220px);
+        display: flex; border-top: 1px solid rgba(140,160,220,.2);
+        background: rgba(13,15,22,.96);
+      }
+      #strip > section { display: flex; flex-direction: column; min-width: 0; padding: 10px 14px; }
+      #feed { flex: 1 1 58%; border-right: 1px solid rgba(140,160,220,.18); }
+      #deals { flex: 1 1 42%; }
+      .head { color: #ffd76e; font-size: 14px; margin-bottom: 6px; }
+      .row { color: #8f9ac4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row b { color: #cdd6ff; font-weight: 600; }
+      .note { color: #59618a; margin-top: auto; }
+    </style>
+  </head>
+  <body>
+    <canvas id="map"></canvas>
+    <div id="hud"><b id="seed">seed 1</b> · <span id="zoom">zoom —</span> · <span id="tile">тайл —</span></div>
+    <div id="strip">
+      <section id="feed">
+        <div class="head">лента</div>
+        <div class="row"><b>мир</b> карта собрана, события ещё не идут</div>
+        <div class="note">события появятся, когда мир начнёт жить</div>
+      </section>
+      <section id="deals">
+        <div class="head">мои дела</div>
+        <div class="row"><b>капитал</b> 12 480</div>
+        <div class="note">сделки, предприятия и рынок — позже</div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
