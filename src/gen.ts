@@ -4,7 +4,7 @@ import { BIOME, type World } from "./world.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, WATER_LEVEL, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST,
-  RIVER_COUNT, RIVER_SOURCE_MIN, RIVER_MAX_LEN, LAKE_RADIUS, RIVER_MIN_LEN,
+  RIVER_COUNT, RIVER_SOURCE_MIN, RIVER_MAX_LEN, LAKE_DEPTH, RIVER_MIN_LEN,
 } from "./config.ts";
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -85,58 +85,76 @@ export function generateWorld(seed: number): World {
     water[i] = b === BIOME.water ? 1 : 0;
   }
 
-  // Rivers: walk downhill from a high source until they reach water, or pool into a lake.
+  // Drainage: fill every depression (priority flood) so all land drains to water.
+  const filled = Float32Array.from(elev);
+  const dir = new Int32Array(w * h).fill(-1);
+  const visited = new Uint8Array(w * h);
+  const BUCKETS = 4096;
+  const buckets: number[][] = Array.from({ length: BUCKETS }, () => []);
+  const bucketOf = (v: number): number => Math.min(BUCKETS - 1, Math.max(0, Math.round(v * (BUCKETS - 1))));
+
+  for (let i = 0; i < water.length; i++) {
+    if (!water[i]) continue;
+    visited[i] = 1;
+    buckets[bucketOf(filled[i])].push(i);
+  }
+  let cursor = 0;
+  while (true) {
+    while (cursor < BUCKETS && buckets[cursor].length === 0) cursor++;
+    if (cursor >= BUCKETS) break;
+    const i = buckets[cursor].pop()!;
+    const x = i % w, y = (i / w) | 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const j = ny * w + nx;
+        if (visited[j]) continue;
+        visited[j] = 1;
+        filled[j] = Math.max(elev[j], filled[i]);   // a pit fills up to its outlet
+        dir[j] = i;
+        buckets[bucketOf(filled[j])].push(j);
+      }
+    }
+  }
+
+  // Deep pits hold standing water; shallow ones are just damp ground on a river's way.
+  let lakes = 0;
+  for (let i = 0; i < water.length; i++) {
+    if (water[i] || filled[i] - elev[i] <= LAKE_DEPTH) continue;
+    water[i] = 1;
+    biome[i] = BIOME.water;
+    lakes++;
+  }
+
+  // Rivers: walk the drainage tree down from a high source until it reaches water.
   const river = new Uint8Array(w * h);
   const flow = new Int32Array(w * h).fill(-1);
   let rivers = 0;
 
-  const lake = (x: number, y: number): void => {
-    for (let dy = -LAKE_RADIUS; dy <= LAKE_RADIUS; dy++) {
-      for (let dx = -LAKE_RADIUS; dx <= LAKE_RADIUS; dx++) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 1 || ny < 1 || nx > w - 2 || ny > h - 2) continue;
-        const j = ny * w + nx;
-        water[j] = 1;
-        biome[j] = BIOME.water;
-      }
-    }
-  };
-
   for (let attempt = 0; attempt < RIVER_COUNT; attempt++) {
-    let x = -1, y = -1;
+    let cur = -1;
     for (let tries = 0; tries < 200; tries++) {
       const sx = 1 + int(rng, w - 2), sy = 1 + int(rng, h - 2);
       const i = sy * w + sx;
-      if (!water[i] && elev[i] >= RIVER_SOURCE_MIN) { x = sx; y = sy; break; }
+      if (!water[i] && elev[i] >= RIVER_SOURCE_MIN) { cur = i; break; }
     }
-    if (x < 0) continue;
+    if (cur < 0) continue;
 
     let len = 0;
-    for (; len < RIVER_MAX_LEN; len++) {
-      const i = y * w + x;
-      river[i] = 1;
-
-      let land = -1, landE = Infinity, sea = -1, seaE = Infinity;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx < 1 || ny < 1 || nx > w - 2 || ny > h - 2) continue;   // never on the rim
-          const j = ny * w + nx;
-          if (water[j]) { if (elev[j] < seaE) { seaE = elev[j]; sea = j; } }
-          else if (!river[j] && elev[j] < landE) { landE = elev[j]; land = j; }
-        }
-      }
-
-      if (land >= 0 && landE < elev[i]) { flow[i] = land; x = land % w; y = (land / w) | 0; continue; }
-      if (sea >= 0) { flow[i] = sea; break; }                            // reached the sea or an existing lake
-      lake(x, y);                                                        // local minimum: the river pools
-      break;
+    while (len < RIVER_MAX_LEN && !water[cur]) {
+      river[cur] = 1;
+      const next = dir[cur];
+      if (next < 0) break;
+      flow[cur] = next;
+      cur = next;
+      len++;
     }
     if (len > RIVER_MIN_LEN) rivers++;
   }
 
-  return { seed, w, h, elev, moist, biome, water, river, flow, rivers };
+  return { seed, w, h, elev, filled, moist, biome, water, river, flow, rivers, lakes };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.

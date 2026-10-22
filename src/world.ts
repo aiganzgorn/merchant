@@ -4,12 +4,14 @@ export type World = {
   w: number;
   h: number;
   elev: Float32Array;      // 0..1, ocean to peak
+  filled: Float32Array;    // elevation with depressions filled — what water actually drains along
   moist: Float32Array;     // 0..1
   biome: Uint8Array;       // BIOME value
   water: Uint8Array;       // 1 = ocean or lake
   river: Uint8Array;       // 1 = river bed
   flow: Int32Array;        // index of the next tile downstream, -1 = ends here
   rivers: number;          // how many rivers were laid
+  lakes: number;           // standing-water tiles beyond the ocean
 };
 
 export const BIOME = {

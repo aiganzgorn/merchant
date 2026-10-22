@@ -24,11 +24,11 @@ export const FOREST_MOIST = 0.48;
 export const RIVER_COUNT = 24;        // how many rivers to try
 export const RIVER_SOURCE_MIN = 0.6;  // a river starts no lower than this elevation
 export const RIVER_MAX_LEN = 400;     // tiles before we give up on one river
-export const LAKE_RADIUS = 1;         // a one-tile lake is ugly: stamp (2r+1)²
+export const LAKE_DEPTH = 0.04;      // how deep a filled pit has to be to hold water
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
 // camera
-export const ZOOM_MIN = 3;       // px per tile, farthest
+export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits
 export const ZOOM_MAX = 48;      // px per tile, closest
 export const ZOOM_START = 20;
 export const PRERENDER_TILE = 8; // px per tile in the prerendered chunks

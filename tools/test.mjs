@@ -80,17 +80,18 @@ for (let i = 0; i < rw.river.length; i++) {
     continue;
   }
   assert.ok(nx >= 0 && nx < rw.river.length, "сток внутри карты");
-  assert.ok(rw.water[nx] === 1 || rw.elev[nx] <= rw.elev[i] + 1e-6,
-    `река не течёт вверх (${rw.elev[i]} → ${rw.elev[nx]})`);
+  assert.ok(rw.water[nx] === 1 || rw.filled[nx] <= rw.filled[i] + 1e-6,
+    `река не течёт вверх (${rw.filled[i]} → ${rw.filled[nx]})`);
 }
 assert.ok(riverTiles > 100, `речных клеток ${riverTiles}`);
+assert.ok(riverTiles > 1000, `реки должны быть длинными: ${riverTiles} клеток на карту`);
 
 // lakes exist somewhere in the first five seeds — most rivers simply reach the sea
 let lakes = 0;
 for (let s = 1; s <= 5; s++) {
   const w = generateWorld(s);
   assert.ok(w.rivers > 0, `seed ${s}: реки есть`);
-  for (let i = 0; i < w.water.length; i++) if (w.water[i] && w.river[i]) lakes++;
+  lakes += w.lakes;
 }
 assert.ok(lakes > 0, "хотя бы одно озеро на пяти картах");
 
@@ -107,6 +108,7 @@ for (let start = 0; start < rw.river.length; start++) {
   let cur = start, steps = 0;
   while (rw.flow[cur] >= 0 && steps++ < 500) cur = rw.flow[cur];
   assert.ok(rw.water[cur] === 1 || rw.flow[cur] === -1, `река от ${start} куда-то приходит`);
+  assert.equal(rw.water[cur], 1, `река от ${start} приходит в воду`);
 }
 
 console.log(`ok — реки: ${rw.rivers} рек, ${riverTiles} клеток`);
