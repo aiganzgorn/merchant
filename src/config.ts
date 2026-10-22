@@ -27,6 +27,14 @@ export const RIVER_MAX_LEN = 400;     // tiles before we give up on one river
 export const LAKE_RADIUS = 1;         // a one-tile lake is ugly: stamp (2r+1)²
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
+// camera
+export const ZOOM_MIN = 3;       // px per tile, farthest
+export const ZOOM_MAX = 48;      // px per tile, closest
+export const ZOOM_START = 20;
+export const PRERENDER_TILE = 8; // px per tile in the prerendered chunks
+export const CHUNK = 32;         // tiles per chunk side
+
+
 export const BIOME_COLORS: Record<number, string> = {
   0: "#12324f", 1: "#c2ab6b", 2: "#4a5636", 3: "#77864a",
   4: "#2b5233", 5: "#54504a", 6: "#6d6a63",
