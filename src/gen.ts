@@ -1,9 +1,10 @@
 // Procedural world from a seed: elevation, moisture, biomes, rivers.
-import { mulberry32 } from "./rng.ts";
+import { mulberry32, int } from "./rng.ts";
 import { BIOME, type World } from "./world.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, WATER_LEVEL, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST,
+  RIVER_COUNT, RIVER_SOURCE_MIN, RIVER_MAX_LEN, LAKE_RADIUS, RIVER_MIN_LEN,
 } from "./config.ts";
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -84,12 +85,58 @@ export function generateWorld(seed: number): World {
     water[i] = b === BIOME.water ? 1 : 0;
   }
 
-  return {
-    seed, w, h, elev, moist, biome, water,
-    river: new Uint8Array(w * h),
-    flow: new Int32Array(w * h).fill(-1),
-    rivers: 0,
+  // Rivers: walk downhill from a high source until they reach water, or pool into a lake.
+  const river = new Uint8Array(w * h);
+  const flow = new Int32Array(w * h).fill(-1);
+  let rivers = 0;
+
+  const lake = (x: number, y: number): void => {
+    for (let dy = -LAKE_RADIUS; dy <= LAKE_RADIUS; dy++) {
+      for (let dx = -LAKE_RADIUS; dx <= LAKE_RADIUS; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 1 || ny < 1 || nx > w - 2 || ny > h - 2) continue;
+        const j = ny * w + nx;
+        water[j] = 1;
+        biome[j] = BIOME.water;
+      }
+    }
   };
+
+  for (let attempt = 0; attempt < RIVER_COUNT; attempt++) {
+    let x = -1, y = -1;
+    for (let tries = 0; tries < 200; tries++) {
+      const sx = 1 + int(rng, w - 2), sy = 1 + int(rng, h - 2);
+      const i = sy * w + sx;
+      if (!water[i] && elev[i] >= RIVER_SOURCE_MIN) { x = sx; y = sy; break; }
+    }
+    if (x < 0) continue;
+
+    let len = 0;
+    for (; len < RIVER_MAX_LEN; len++) {
+      const i = y * w + x;
+      river[i] = 1;
+
+      let land = -1, landE = Infinity, sea = -1, seaE = Infinity;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 1 || ny < 1 || nx > w - 2 || ny > h - 2) continue;   // never on the rim
+          const j = ny * w + nx;
+          if (water[j]) { if (elev[j] < seaE) { seaE = elev[j]; sea = j; } }
+          else if (!river[j] && elev[j] < landE) { landE = elev[j]; land = j; }
+        }
+      }
+
+      if (land >= 0 && landE < elev[i]) { flow[i] = land; x = land % w; y = (land / w) | 0; continue; }
+      if (sea >= 0) { flow[i] = sea; break; }                            // reached the sea or an existing lake
+      lake(x, y);                                                        // local minimum: the river pools
+      break;
+    }
+    if (len > RIVER_MIN_LEN) rivers++;
+  }
+
+  return { seed, w, h, elev, moist, biome, water, river, flow, rivers };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.
