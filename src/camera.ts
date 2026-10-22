@@ -53,3 +53,9 @@ export function visibleChunks(cam: Camera, vw: number, vh: number): { cx0: numbe
     cy1: chunk(cam.y + halfH, CHUNKS_Y),
   };
 }
+
+// Wheel delta normalised to pixels: Firefox reports lines (1) or pages (2), not pixels (0).
+export function wheelFactor(deltaY: number, deltaMode: number, pageHeight: number): number {
+  const px = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * pageHeight : deltaY;
+  return Math.exp(-px * 0.0015);
+}

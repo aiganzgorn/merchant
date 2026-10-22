@@ -2,7 +2,7 @@
 import { STRIP_H, MAP_W, MAP_H, ZOOM_START } from "./config.ts";
 import { generateWorld, seedFromQuery } from "./gen.ts";
 import { prerender, draw } from "./render.ts";
-import { mapViewport, clampCamera, screenToWorld, zoomAt, type Camera } from "./camera.ts";
+import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Camera } from "./camera.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -42,37 +42,44 @@ function showTile(clientX: number, clientY: number): void {
     return;
   }
   const w = screenToWorld(cam, view.w, view.h, clientX, clientY);
-  cursorEl.textContent = `тайл ${Math.floor(w.x)},${Math.floor(w.y)}`;
+  const tx = Math.floor(w.x), ty = Math.floor(w.y);
+  // outside the map itself (letterboxed at min zoom) there is no tile to name
+  if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) {
+    cursorEl.textContent = "тайл —";
+    return;
+  }
+  cursorEl.textContent = `тайл ${tx},${ty}`;
 }
 
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
-  cam = zoomAt(cam, view.w, view.h, e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+  cam = zoomAt(cam, view.w, view.h, e.clientX, e.clientY, wheelFactor(e.deltaY, e.deltaMode, view.h));
   $("zoom").textContent = `zoom ${cam.zoom.toFixed(1)}`;
   showTile(e.clientX, e.clientY);
   draw(ctx, world, chunks, cam, view.w, view.h);
 }, { passive: false });
 
 let dragging = false;
-let downX = 0, downY = 0;
-let from: Camera = cam;
+let lastX = 0, lastY = 0;
 
 canvas.addEventListener("pointerdown", (e) => {
   dragging = true;
-  downX = e.clientX;
-  downY = e.clientY;
-  from = cam;
+  lastX = e.clientX;
+  lastY = e.clientY;
   canvas.classList.add("drag");
   canvas.setPointerCapture(e.pointerId);
 });
 
 canvas.addEventListener("pointermove", (e) => {
   if (dragging) {
+    // move by the step since the last event, so a wheel zoom mid-drag does not snap back
     cam = clampCamera({
-      x: from.x - (e.clientX - downX) / cam.zoom,
-      y: from.y - (e.clientY - downY) / cam.zoom,
+      x: cam.x - (e.clientX - lastX) / cam.zoom,
+      y: cam.y - (e.clientY - lastY) / cam.zoom,
       zoom: cam.zoom,
     }, view.w, view.h);
+    lastX = e.clientX;
+    lastY = e.clientY;
     draw(ctx, world, chunks, cam, view.w, view.h);
   }
   showTile(e.clientX, e.clientY);

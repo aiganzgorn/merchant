@@ -152,6 +152,12 @@ export function generateWorld(seed: number): World {
       len++;
     }
     if (len > RIVER_MIN_LEN) rivers++;
+    // a river that hits the cap must still end in water, never in the middle of land
+    if (len >= RIVER_MAX_LEN && cur >= 0 && !water[cur]) {
+      water[cur] = 1;
+      biome[cur] = BIOME.water;
+      lakes++;
+    }
   }
 
   return { seed, w, h, elev, filled, moist, biome, water, river, flow, rivers, lakes };

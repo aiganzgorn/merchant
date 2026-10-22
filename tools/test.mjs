@@ -162,3 +162,57 @@ const edgeChunks = visibleChunks(clampCamera({ x: 0, y: 0, zoom: 20 }, 800, 600)
 assert.ok(edgeChunks.cx0 >= 0 && edgeChunks.cy0 >= 0, "у края чанки не отрицательные");
 
 console.log("ok — камера: зум к курсору, края, чанки");
+
+// --- review fixes: wheel scaling, map bounds, camera fuzz ---------------------
+import { wheelFactor } from "../src/camera.ts";
+
+// a mouse notch on Chrome (~100 px) and on Firefox line mode (3 lines) must feel similar
+const chromeNotch = wheelFactor(100, 0, 680);
+const firefoxNotch = wheelFactor(3, 1, 680);
+assert.ok(chromeNotch > 0.8 && chromeNotch < 0.95, `колесо Chrome: ${chromeNotch.toFixed(3)}`);
+assert.ok(firefoxNotch > 0.88 && firefoxNotch < 0.99, `колесо Firefox: ${firefoxNotch.toFixed(3)}`);
+assert.ok(Math.abs(chromeNotch - firefoxNotch) < 0.09, "нотки в двух браузерах близки");
+assert.ok(wheelFactor(1, 2, 900) < chromeNotch, "страничный режим прокручивается сильнее");
+
+// zoom pinned in the corner keeps the corner tile
+for (const corner of [[0, 0], [800, 600], [0, 600], [800, 0]]) {
+  const pinned = clampCamera({ x: -1e9, y: -1e9, zoom: 20 }, 800, 600);
+  const under = screenToWorld(pinned, 800, 600, corner[0], corner[1]);
+  const z = zoomAt(pinned, 800, 600, corner[0], corner[1], 4);
+  const after = screenToWorld(z, 800, 600, corner[0], corner[1]);
+  assert.ok(near(under.x, after.x, 1e-6) && near(under.y, after.y, 1e-6),
+    `угол ${corner} не съезжает при приближении`);
+}
+
+// random pan and zoom never leaves the map while the map is bigger than the viewport
+{
+  let rp = mulberry32(9), c = clampCamera({ x: 256, y: 256, zoom: 20 }, 900, 680);
+  for (let i = 0; i < 400; i++) {
+    if (rp() < 0.5) c = clampCamera({ x: c.x + (rp() - 0.5) * 200, y: c.y + (rp() - 0.5) * 200, zoom: c.zoom }, 900, 680);
+    else c = zoomAt(c, 900, 680, rp() * 900, rp() * 680, 0.5 + rp());
+    assert.ok(Number.isFinite(c.x) && Number.isFinite(c.y) && Number.isFinite(c.zoom), "камера конечна");
+    assert.ok(c.zoom >= ZOOM_MIN && c.zoom <= ZOOM_MAX, `зум ${c.zoom} в пределах`);
+    const halfW = 900 / 2 / c.zoom, halfH = 680 / 2 / c.zoom;
+    if (MAP_W * c.zoom > 900) assert.ok(c.x >= halfW - 1e-9 && c.x <= MAP_W - halfW + 1e-9, `x ${c.x} внутри`);
+    else assert.ok(near(c.x, MAP_W / 2), "узкая карта по центру");
+    if (MAP_H * c.zoom > 680) assert.ok(c.y >= halfH - 1e-9 && c.y <= MAP_H - halfH + 1e-9, `y ${c.y} внутри`);
+    else assert.ok(near(c.y, MAP_H / 2), "низкая карта по центру");
+  }
+}
+
+// empty telltales: ?seed= (nothing after the =) also falls back
+assert.equal(seedFromQuery("?seed="), 1, "пустой seed — 1");
+assert.equal(seedFromQuery("?seed=1e999"), 1, "бесконечность — 1");
+
+// every river reaches water, on ten seeds, not just one
+for (let s = 1; s <= 10; s++) {
+  const w = generateWorld(s);
+  for (let i = 0; i < w.river.length; i++) {
+    if (!w.river[i]) continue;
+    let cur = i, steps = 0;
+    while (!w.water[cur] && w.flow[cur] >= 0 && steps++ < 2000) cur = w.flow[cur];
+    assert.ok(w.water[cur] === 1, `seed ${s}: река от ${i} приходит в воду`);
+  }
+}
+
+console.log("ok — крайние случаи: колесо, углы, случайные панорамы, реки на десяти seed-ах");
