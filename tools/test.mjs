@@ -23,7 +23,7 @@ console.log("ok — rng: детерминизм и диапазон");
 // --- terrain, moisture, biomes -----------------------------------------------
 import { generateWorld, seedFromQuery } from "../src/gen.ts";
 import { BIOME, idx, POI, RESOURCE } from "../src/world.ts";
-import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH, SETTLEMENT_COUNT } from "../src/config.ts";
+import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH, SETTLEMENT_COUNT, POI_OWN_RANGE } from "../src/config.ts";
 
 const test = (name, fn) => fn();
 
@@ -439,11 +439,44 @@ const settlementNames = ws.settlements.map((s) => s.name);
 assert.equal(new Set(settlementNames).size, settlementNames.length, "имена поселений не повторяются");
 assert.ok(ws.settlements.every((s) => s.water), "каждое поселение у воды");
 assert.ok(ws.settlements.some((s) => s.pois.length > 0), "у кого-то есть точки");
+
+const nearestSettlementDist = (w, p) => {
+  let best = Infinity;
+  for (const s of w.settlements) {
+    const d = Math.hypot(s.x - p.x, s.y - p.y);
+    if (d < best) best = d;
+  }
+  return best;
+};
+
 for (const p of ws.poi) {
   if (!p.known) continue;
   const owner = ws.settlements.findIndex((s) => s.pois.includes(ws.poi.indexOf(p)));
-  assert.ok(owner >= 0, `у видимой точки есть хозяин (${p.kind})`);
+  if (nearestSettlementDist(ws, p) <= POI_OWN_RANGE) {
+    assert.ok(owner >= 0, `у видимой точки в радиусе ${POI_OWN_RANGE} есть хозяин (${p.kind})`);
+  }
 }
+
+// Mines are owned in data but stay hidden from the player.
+for (const p of ws.poi) {
+  if (p.kind !== POI.mine) continue;
+  const owner = ws.settlements.findIndex((s) => s.pois.includes(ws.poi.indexOf(p)));
+  assert.ok(owner >= 0, "рудник получает хозяина в данных");
+  assert.ok(!p.known, "рудник остаётся скрытым");
+}
+
+for (const seed of [1, 8, 42, 1000]) {
+  const w = generateWorld(seed);
+  const names = new Set();
+  for (const s of w.settlements) {
+    assert.ok(s.population >= 20 && s.population <= 60, `seed ${seed}: население ${s.population}`);
+    assert.equal(s.level, 0, `seed ${seed}: уровень хутора`);
+    assert.ok(s.buildings.houses >= 1, `seed ${seed}: есть дома`);
+    names.add(s.name);
+  }
+  assert.equal(names.size, w.settlements.length, `seed ${seed}: имена поселений уникальны`);
+}
+
 console.log("ok — поселения: имена, население, вода, владение точками");
 
 // --- regions and names --------------------------------------------------------

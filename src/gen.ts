@@ -52,14 +52,14 @@ function normalize(values: Float32Array): void {
   for (let i = 0; i < values.length; i++) values[i] = (values[i] - min) / span;
 }
 
-// Returns a map where 1 means a non-hill/mountain tile can reach water or a river
-// within WATER_REACH steps over land (4-neighbourhood).
-function waterReachMap(water: Uint8Array, river: Uint8Array, biome: Uint8Array, w: number, h: number): Uint8Array {
+// Returns a map where 1 means a non-hill/mountain tile can reach a water biome
+// tile within WATER_REACH steps over land (4-neighbourhood).
+function waterReachMap(water: Uint8Array, biome: Uint8Array, w: number, h: number): Uint8Array {
   const n = w * h;
   const dist = new Int16Array(n).fill(-1);
   const q: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (water[i] || river[i]) { dist[i] = 0; q.push(i); }
+    if (water[i]) { dist[i] = 0; q.push(i); }
   }
   for (let head = 0; head < q.length; head++) {
     const i = q[head];
@@ -137,18 +137,11 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
 
   const settlements: Settlement[] = [];
   const occupied = new Uint8Array(n);
-  const anchors = poi.filter(p => p.kind === POI.fishing || p.kind === POI.logging);
-  // Shuffle once so cycling through anchors spreads towns rather than stacking them.
-  for (let i = anchors.length - 1; i > 0; i--) {
-    const j = int(rng, i + 1);
-    const tmp = anchors[i];
-    anchors[i] = anchors[j];
-    anchors[j] = tmp;
-  }
-  for (let s = 0; s < SETTLEMENT_COUNT; s++) {
-    if (anchors.length === 0) break;
-    const base = anchors[s % anchors.length];
-    const options: Settlement[] = [];
+  let anchors = poi.filter(p => p.kind === POI.fishing || p.kind === POI.logging);
+  while (settlements.length < SETTLEMENT_COUNT && anchors.length > 0) {
+    const ai = int(rng, anchors.length);
+    const base = anchors[ai];
+    const options: { x: number; y: number }[] = [];
     for (let dy = -SETTLEMENT_REACH; dy <= SETTLEMENT_REACH; dy++) {
       for (let dx = -SETTLEMENT_REACH; dx <= SETTLEMENT_REACH; dx++) {
         const nx = base.x + dx, ny = base.y + dy;
@@ -156,15 +149,18 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
         const j = ny * w + nx;
         const b = biome[j];
         if (b === BIOME.water || b === BIOME.hill || b === BIOME.mountain) continue;
-        if (occupied[j] || poiTile[j]) continue;
+        if (river[j] || occupied[j] || poiTile[j]) continue;
         if (!waterReach[j]) continue;
-        options.push({ x: nx, y: ny } as Settlement);
+        options.push({ x: nx, y: ny });
       }
     }
-    if (options.length === 0) continue;
+    if (options.length === 0) {
+      anchors.splice(ai, 1);
+      continue;
+    }
     const choice = options[int(rng, options.length)];
     occupied[choice.y * w + choice.x] = 1;
-    settlements.push(choice);
+    settlements.push(choice as Settlement);
   }
 
   return { poi, settlements };
@@ -539,7 +535,7 @@ export function generateWorld(seed: number): World {
     }
   }
 
-  const waterReach = waterReachMap(water, river, biome, w, h);
+  const waterReach = waterReachMap(water, biome, w, h);
   const { poi, settlements } = placePoi(rng, seed, biome, water, river, waterReach, w, h);
 
   const worldBase = { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains, poi, settlements };
@@ -560,11 +556,8 @@ export function generateWorld(seed: number): World {
     });
   }
 
-  // Assign every POI to its nearest settlement. POI_OWN_RANGE is the intended
-  // gameplay ownership radius, but the test suite requires every known POI to
-  // have an owner even when the sparse water filter leaves towns far apart.
-  // shortcut: POI_OWN_RANGE is recorded as a cap; upgrade when ownership rules
-  // are enforced strictly (e.g. only POIs within range get a local owner).
+  // Known POIs are owned only by the nearest settlement within POI_OWN_RANGE.
+  // Hidden mines always get an owner in data so the simulation can track them.
   for (let pi = 0; pi < poi.length; pi++) {
     const p = poi[pi];
     let best = -1, bestDist = Infinity;
@@ -573,7 +566,8 @@ export function generateWorld(seed: number): World {
       const d = Math.hypot(s.x - p.x, s.y - p.y);
       if (d < bestDist) { bestDist = d; best = si; }
     }
-    if (best >= 0) settlements[best].pois.push(pi);
+    if (best < 0) continue;
+    if (bestDist <= POI_OWN_RANGE || p.kind === POI.mine) settlements[best].pois.push(pi);
   }
 
   return { ...worldBase, regionOf, cultures, namer };
