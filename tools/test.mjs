@@ -412,4 +412,13 @@ test("poiAt finds a POI at its screen centre and returns null in empty space", (
   assert.equal(poiAt(w, cam, vw, vh, 0, 0), null, "poiAt misses empty corner");
 });
 
+test("poiAt ignores hidden mines", () => {
+  const w = generateWorld(42);
+  const mine = w.poi.find((p) => p.kind === POI.mine && !p.known);
+  assert.ok(mine, "there is a hidden mine");
+  const cam = { x: w.w / 2, y: w.h / 2, zoom: 20 };
+  const s = worldToScreen(cam, 800, 600, mine.x + 0.5, mine.y + 0.5);
+  assert.equal(poiAt(w, cam, 800, 600, s.x, s.y), null, "hidden mine has no hit target");
+});
+
 console.log("ok — POI рендеринг: видимые точки, попадание по экранным координатам");

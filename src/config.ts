@@ -58,7 +58,7 @@ export const POI_COUNTS: Record<number, number> = {
   7: 6, // mine
 };
 export const POI_MIN_GAP = 10;    // tiles between POIs of the same kind
-export const POI_ZONE = 40;       // placement radius from a settlement anchor (reserved for future use)
+export const POI_ZONE = 22;       // placement radius from a settlement anchor, px on screen = * cam.zoom
 export const SETTLEMENT_COUNT = 24; // first towns to seed the map
 export const SETTLEMENT_REACH = 6; // tiles a town may stand from a fishing or logging POI
 
@@ -75,7 +75,7 @@ export const POI_BIOMES: Record<number, number[]> = {
 
 export const POI_ICON_PX = 9;      // badge radius in screen pixels, constant at any zoom
 export const POI_HIT_PX = 12;      // screen-pixel radius for mouse selection
-export const POI_ZONE_ALPHA = 0.10; // placement-zone fill transparency
+export const POI_ZONE_ALPHA = 0.07; // placement-zone fill transparency
 export const POI_COLORS: Record<number, string> = {
   [0]: "#5d8a4e", // logging — forest green
   [1]: "#8b5a3a", // hunting — hide brown
@@ -86,6 +86,8 @@ export const POI_COLORS: Record<number, string> = {
   [6]: "#7a7a7a", // quarry — stone grey
   [7]: "#a05050", // mine — rusted ore
 };
+export const POI_FALLBACK_COLOR = "#999999"; // for POI kinds without an explicit colour
+export const POI_GLYPH_STROKE = "#0d0f16";   // badge outline and glyph ink
 
 // camera
 export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits

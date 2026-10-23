@@ -2,6 +2,7 @@
 import {
   CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP,
   POI_ICON_PX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
+  POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
 } from "./config.ts";
 import type { Poi, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
@@ -128,8 +129,8 @@ export function visiblePois(world: World): Poi[] {
 }
 
 function glyph(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number, r: number): void {
-  ctx.fillStyle = "#0d0f16";
-  ctx.strokeStyle = "#0d0f16";
+  ctx.fillStyle = POI_GLYPH_STROKE;
+  ctx.strokeStyle = POI_GLYPH_STROKE;
   ctx.lineWidth = Math.max(1, r * 0.22);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -153,12 +154,15 @@ function glyph(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number
       ctx.stroke();
       break;
     }
-    case 2: { // fishing — fish with tail
+    case 2: { // fishing — two arcs for the body plus a tail
       ctx.beginPath();
-      ctx.ellipse(x - r * 0.05, y, r * 0.45, r * 0.28, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(x - r * 0.15, y, r * 0.45, -Math.PI * 0.6, Math.PI * 0.6);
+      ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(x + r * 0.3, y);
+      ctx.arc(x + r * 0.15, y, r * 0.45, Math.PI * 0.6, -Math.PI * 0.6, true);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + r * 0.25, y);
       ctx.lineTo(x + r * 0.75, y - r * 0.35);
       ctx.lineTo(x + r * 0.75, y + r * 0.35);
       ctx.closePath();
@@ -224,26 +228,39 @@ function glyph(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number
 export function drawPois(
   ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number, zones: boolean,
 ): void {
-  for (const p of visiblePois(world)) {
-    const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
-    const color = POI_COLORS[p.kind] ?? "#999999";
+  const pois = visiblePois(world);
+  const alphaHex = Math.round(POI_ZONE_ALPHA * 255).toString(16).padStart(2, "0");
 
-    if (zones) {
+  // Pass 1: zones first, so a later point's zone never tints an earlier point's icon.
+  if (zones) {
+    for (const p of pois) {
+      const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
+      const color = POI_COLORS[p.kind] ?? POI_FALLBACK_COLOR;
       ctx.beginPath();
       ctx.arc(s.x, s.y, POI_ZONE * cam.zoom, 0, Math.PI * 2);
-      ctx.fillStyle = color + Math.round(POI_ZONE_ALPHA * 255).toString(16).padStart(2, "0");
+      ctx.fillStyle = color + alphaHex;
       ctx.fill();
     }
+  }
+
+  // Pass 2: badges and glyphs.
+  for (const p of pois) {
+    const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
+    const color = POI_COLORS[p.kind] ?? POI_FALLBACK_COLOR;
+    // Scale the badge down at low zoom to stop icons crowding; keep hit radius unchanged.
+    const r = Math.min(POI_ICON_PX, Math.max(3.5, POI_ICON_PX * cam.zoom / 6));
 
     ctx.beginPath();
-    ctx.arc(s.x, s.y, POI_ICON_PX, 0, Math.PI * 2);
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#0d0f16";
+    ctx.strokeStyle = POI_GLYPH_STROKE;
     ctx.stroke();
 
-    glyph(ctx, p.kind, s.x, s.y, POI_ICON_PX);
+    if (r >= 5.5) {
+      glyph(ctx, p.kind, s.x, s.y, r);
+    }
   }
 }
 
