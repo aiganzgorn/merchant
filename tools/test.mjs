@@ -486,6 +486,19 @@ for (const seed of [1, 8, 42, 1000]) {
   assert.equal(names.size, w.settlements.length, `seed ${seed}: имена поселений уникальны`);
 }
 
+// Every town must own at least one point and no point may belong to two towns.
+for (const seed of [1, 8, 42, 1000]) {
+  const w = generateWorld(seed);
+  const seen = new Set();
+  for (const s of w.settlements) {
+    assert.ok(s.pois.length >= 1, `seed ${seed}: поселение без точек`);
+    for (const pi of s.pois) {
+      assert.ok(!seen.has(pi), `seed ${seed}: точка ${pi} в двух поселениях`);
+      seen.add(pi);
+    }
+  }
+}
+
 console.log("ok — поселения: имена, население, вода, владение точками");
 
 // --- regions and names --------------------------------------------------------

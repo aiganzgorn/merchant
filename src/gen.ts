@@ -176,6 +176,7 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
     const choice = best[int(rng, best.length)];
     occupied[choice.y * w + choice.x] = 1;
     settlements.push(choice as Settlement);
+    anchors.splice(ai, 1); // one town per anchor to spread towns evenly
     for (let pi = 0; pi < poi.length; pi++) {
       const p = poi[pi];
       if (Math.hypot(choice.x - p.x, choice.y - p.y) <= POI_OWN_RANGE) covered[pi] = 1;
@@ -585,6 +586,57 @@ export function generateWorld(seed: number): World {
       if (d < bestDist) { bestDist = d; best = si; }
     }
     if (best >= 0 && bestDist <= POI_OWN_RANGE) settlements[best].pois.push(pi);
+  }
+
+  // Fallback: every town must own at least one point. Reassign from a donor
+  // with 3+ points or claim an unowned point, both within twice the ownership
+  // range. If nothing is near enough, the town stays empty (sparse map).
+  const ownerOf = new Int32Array(poi.length).fill(-1);
+  const pointCount = new Int32Array(settlements.length);
+  for (let si = 0; si < settlements.length; si++) {
+    for (const pi of settlements[si].pois) { ownerOf[pi] = si; pointCount[si]++; }
+  }
+
+  const RANGE2 = POI_OWN_RANGE * 2;
+  for (let si = 0; si < settlements.length; si++) {
+    if (pointCount[si] > 0) continue;
+    const s = settlements[si];
+    let bestPi = -1, bestDist = Infinity;
+
+    // 1. Nearest point owned by a town with 3+ points.
+    for (let pi = 0; pi < poi.length; pi++) {
+      const cur = ownerOf[pi];
+      if (cur < 0 || cur === si || pointCount[cur] < 3) continue;
+      const p = poi[pi];
+      const d = Math.hypot(s.x - p.x, s.y - p.y);
+      if (d > RANGE2 || d >= bestDist) continue;
+      bestDist = d; bestPi = pi;
+    }
+
+    // 2. Nearest unowned point.
+    if (bestPi < 0) {
+      for (let pi = 0; pi < poi.length; pi++) {
+        if (ownerOf[pi] >= 0) continue;
+        const p = poi[pi];
+        const d = Math.hypot(s.x - p.x, s.y - p.y);
+        if (d > RANGE2 || d >= bestDist) continue;
+        bestDist = d; bestPi = pi;
+      }
+    }
+
+    if (bestPi >= 0) {
+      const cur = ownerOf[bestPi];
+      if (cur >= 0) pointCount[cur]--;
+      ownerOf[bestPi] = si;
+      pointCount[si]++;
+    }
+  }
+
+  // Rebuild per-settlement index lists from the single ownership map.
+  for (const st of settlements) st.pois.length = 0;
+  for (let pi = 0; pi < poi.length; pi++) {
+    const si = ownerOf[pi];
+    if (si >= 0) settlements[si].pois.push(pi);
   }
 
   return { ...worldBase, regionOf, cultures, namer };
