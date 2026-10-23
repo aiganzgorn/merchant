@@ -933,3 +933,46 @@ for (let i = 0; i < labels.length; i++) {
 assert.equal(layoutSettlementLabels(labelWorld, { ...labelCam, zoom: 1.2 }, 900, 600, measure).length, 0, "на общем плане подписи скрыты");
 
 console.log("ok — подписи поселений: в кадре, без наложений, скрыты на общем плане");
+
+// --- крупное деление мира и разнообразие имён ----------------------------------
+{
+  const isLand = (w, i) => {
+    const b = w.biome[i];
+    return b !== 0 && b !== 5 && b !== 6 && w.river[i] === 0;
+  };
+  for (const seed of [8, 42, 1000]) {
+    const w = generateWorld(seed);
+    let land = 0;
+    const sizes = new Map();
+    for (let i = 0; i < w.biome.length; i++) {
+      if (!isLand(w, i)) continue;
+      land++;
+      const r = w.regionOf[i];
+      if (r >= 0) sizes.set(r, (sizes.get(r) || 0) + 1);
+    }
+    const biggest = Math.max(...sizes.values());
+    assert.ok(biggest / land <= 0.45, `seed ${seed}: крупнейший край ${Math.round((biggest / land) * 100)}% суши, ждём ≤45%`);
+
+    const towns = w.settlements.filter((s) => !s.abandoned);
+    const usedCultures = new Set(towns.map((s) => w.cultures[s.region]?.name));
+    assert.ok(usedCultures.size >= 3, `seed ${seed}: города живут в ${usedCultures.size} культурах, ждём ≥3`);
+  }
+
+  // inside one culture the names must not share their first letter
+  const w = generateWorld(42);
+  const culture = w.cultures[0];
+  const sample = Array.from({ length: 20 }, () => w.namer.settlement(culture.id));
+  const firsts = new Set(sample.map((n) => n[0]));
+  assert.ok(firsts.size >= 5, `у края ${culture.name} всего ${firsts.size} начальных букв на 20 имён`);
+  const hyphenShare = sample.filter((n) => n.includes("-")).length / sample.length;
+  assert.ok(hyphenShare <= 0.5, `имён с дефисом ${Math.round(hyphenShare * 100)}%, ждём ≤50%`);
+  const lengths = new Set(sample.map((n) => n.replace("-", "").length));
+  assert.ok(lengths.size >= 4, `длины имён однообразны: ${[...lengths].join(",")}`);
+
+  // the Slavic suffixes the design asks for must actually turn up
+  const all = [];
+  for (const c of w.cultures) for (let i = 0; i < 30; i++) all.push(w.namer.settlement(c.id));
+  const slavic = all.filter((n) => /(ово|ино|ец|град|поль|ичи)$/.test(n));
+  assert.ok(slavic.length >= 5, `славянских имён ${slavic.length}, ждём ≥5`);
+  console.log(`ok — крупные края и имена: ${sample.slice(0, 6).join(", ")}`);
+}

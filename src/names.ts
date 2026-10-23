@@ -18,7 +18,7 @@ function capitalize(s: string): string {
 function buildSyllable(onset: string[], vowel: string[], coda: string[], rng: Rng): string {
   const o = pick(onset, rng);
   const v = pick(vowel, rng);
-  const cd = rng() < 0.5 ? pick(coda, rng) : "";
+  const cd = coda.length > 0 && rng() < 0.35 ? pick(coda, rng) : "";
   return o + v + cd;
 }
 
@@ -28,12 +28,12 @@ function makeSyllable(culture: CultureRegion, rng: Rng): string {
 
 function makeRandomName(culture: CultureRegion, rng: Rng): string {
   const ending = pick(culture.endings, rng);
-  if (rng() < 0.4) {
-    const a = makeSyllable(culture, rng);
-    const b = makeSyllable(culture, rng);
-    return capitalize(`${a}-${b}${ending}`);
-  }
-  return capitalize(`${makeSyllable(culture, rng)}${ending}`);
+  const roll = rng();
+  const syllables = roll < 0.25 ? 1 : roll < 0.75 ? 2 : 3;
+  const parts: string[] = [];
+  for (let i = 0; i < syllables; i++) parts.push(makeSyllable(culture, rng));
+  const joiner = syllables === 2 && rng() < 0.3 ? "-" : "";
+  return capitalize(parts.join(joiner) + ending);
 }
 
 export function buildRegions(world: World): { regionOf: Int16Array; cultures: CultureRegion[] } {
@@ -43,28 +43,79 @@ export function buildRegions(world: World): { regionOf: Int16Array; cultures: Cu
 
   const isWall = (i: number) => water[i] || river[i] || biome[i] === BIOME.hill || biome[i] === BIOME.mountain;
 
-  const stack: number[] = [];
-  let nextId = 0;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      if (isWall(i) || regionOf[i] >= 0) continue;
-      stack.length = 0;
-      stack.push(i);
-      regionOf[i] = nextId;
-      while (stack.length) {
-        const j = stack.pop()!;
-        const jx = j % w, jy = (j / w) | 0;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = jx + dx, ny = jy + dy;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          const k = ny * w + nx;
-          if (isWall(k) || regionOf[k] >= 0) continue;
-          regionOf[k] = nextId;
-          stack.push(k);
-        }
+  const land: number[] = [];
+  for (let i = 0; i < n; i++) if (!isWall(i)) land.push(i);
+
+  // Seeds spread by farthest-point sampling. Growing every seed at once splits a
+  // big continent into comparable regions; water, rivers and mountains remain walls.
+  const seeds: number[] = [];
+  if (land.length > 0) {
+    let first = land[0], bestD = Infinity;
+    for (const i of land) {
+      const dx = (i % w) - w / 2, dy = ((i / w) | 0) - h / 2;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; first = i; }
+    }
+    seeds.push(first);
+
+    const nearest = new Float64Array(n).fill(Infinity);
+    const updateNearest = (s: number) => {
+      const sx = s % w, sy = (s / w) | 0;
+      for (const i of land) {
+        const dx = (i % w) - sx, dy = ((i / w) | 0) - sy;
+        const d = dx * dx + dy * dy;
+        if (d < nearest[i]) nearest[i] = d;
       }
-      nextId++;
+    };
+    updateNearest(first);
+    while (seeds.length < MAX_REGIONS) {
+      let pickIdx = -1, pickVal = -1;
+      for (const i of land) if (nearest[i] > pickVal) { pickVal = nearest[i]; pickIdx = i; }
+      if (pickIdx < 0 || pickVal === 0) break;
+      seeds.push(pickIdx);
+      updateNearest(pickIdx);
+    }
+  }
+
+  // Multi-source BFS: the nearest seed claims each tile, seed by seed, layer by layer.
+  let nextId = 0;
+  const queue: number[] = [];
+  for (const s of seeds) {
+    regionOf[s] = nextId++;
+    queue.push(s);
+  }
+  for (let qi = 0; qi < queue.length; qi++) {
+    const j = queue[qi];
+    const jx = j % w, jy = (j / w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = jx + dx, ny = jy + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const k = ny * w + nx;
+      if (isWall(k) || regionOf[k] >= 0) continue;
+      regionOf[k] = regionOf[j];
+      queue.push(k);
+    }
+  }
+
+  // Islands no seed reached become regions of their own and are merged later.
+  const stack: number[] = [];
+  for (const i of land) {
+    if (regionOf[i] >= 0) continue;
+    const id = nextId++;
+    regionOf[i] = id;
+    stack.length = 0;
+    stack.push(i);
+    while (stack.length) {
+      const j = stack.pop()!;
+      const jx = j % w, jy = (j / w) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = jx + dx, ny = jy + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (isWall(k) || regionOf[k] >= 0) continue;
+        regionOf[k] = id;
+        stack.push(k);
+      }
     }
   }
 
