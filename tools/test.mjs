@@ -23,7 +23,7 @@ console.log("ok — rng: детерминизм и диапазон");
 // --- terrain, moisture, biomes -----------------------------------------------
 import { generateWorld, seedFromQuery } from "../src/gen.ts";
 import { BIOME, idx, POI, RESOURCE } from "../src/world.ts";
-import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH } from "../src/config.ts";
+import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH, SETTLEMENT_COUNT } from "../src/config.ts";
 
 const test = (name, fn) => fn();
 
@@ -423,6 +423,28 @@ for (const seed of [1, 8, 42, 1000]) {
 }
 
 console.log("ok — точки интереса и поселения: биомы, запасы, скрытая руда, близость воды/леса");
+
+// --- settlements as objects ---------------------------------------------------
+const ws = generateWorld(42);
+assert.ok(ws.settlements.length >= 12 && ws.settlements.length <= SETTLEMENT_COUNT, `поселений ${ws.settlements.length}`);
+for (const s of ws.settlements) {
+  assert.ok(s.name.length >= 4, "у поселения есть имя");
+  assert.ok(s.population >= 20 && s.population <= 60, `стартовое население ${s.population}`);
+  assert.equal(s.level, 0, "все начинают хуторами");
+  assert.equal(s.abandoned, false);
+  assert.equal(s.stock.length, 10, "склад по числу ресурсов");
+  assert.ok(Array.isArray(s.pois));
+}
+const settlementNames = ws.settlements.map((s) => s.name);
+assert.equal(new Set(settlementNames).size, settlementNames.length, "имена поселений не повторяются");
+assert.ok(ws.settlements.every((s) => s.water), "каждое поселение у воды");
+assert.ok(ws.settlements.some((s) => s.pois.length > 0), "у кого-то есть точки");
+for (const p of ws.poi) {
+  if (!p.known) continue;
+  const owner = ws.settlements.findIndex((s) => s.pois.includes(ws.poi.indexOf(p)));
+  assert.ok(owner >= 0, `у видимой точки есть хозяин (${p.kind})`);
+}
+console.log("ok — поселения: имена, население, вода, владение точками");
 
 // --- regions and names --------------------------------------------------------
 const w1 = generateWorld(42);

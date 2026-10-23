@@ -86,6 +86,14 @@ export const POI_MIN_GAP = 10;    // tiles between POIs of the same kind
 export const POI_ZONE = 22;       // radius drawn around a POI and used by its card, tiles
 export const SETTLEMENT_COUNT = 24; // first towns to seed the map
 export const SETTLEMENT_REACH = 6; // tiles a town may stand from a fishing or logging POI
+export const START_POP_MIN = 20;
+export const START_POP_MAX = 60;
+export const WATER_REACH = 12; // tiles a settlement looks for fresh water over land
+export const POI_OWN_RANGE = 40; // tiles within which a POI is owned by the nearest settlement
+export const RESOURCE_COUNT = 10;
+export const LEVEL_POP = [20, 120, 600, 2500, 6000, 20000];
+export const LEVEL_NAMES = ["хутор", "деревня", "село", "посад", "город", "столица"];
+export const HOUSES_PER_POP = 5; // people per house, rounded up
 
 export const POI_BIOMES: Record<number, number[]> = {
   [0]: [BIOME.forest],          // logging

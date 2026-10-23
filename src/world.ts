@@ -88,6 +88,18 @@ export type Poi = {
   known: boolean;
 };
 
-export type Settlement = { x: number; y: number; name?: string };
+export type Settlement = {
+  x: number;
+  y: number;
+  name: string;
+  region: number;
+  population: number;
+  level: number;
+  abandoned: boolean;
+  water: boolean;
+  stock: Float32Array;
+  buildings: { houses: number; admin: number; industry: number; trade: number };
+  pois: number[];
+};
 
 export const idx = (w: World, x: number, y: number): number => y * w.w + x;
