@@ -45,7 +45,7 @@ export const LAKE_MIN_AREA = 16;     // smaller pools are wetlands, not lakes
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
 // points of interest and settlements
-import { BIOME } from "./world.ts";
+import { BIOME, POI, RESOURCE } from "./world.ts";
 
 export const POI_COUNTS: Record<number, number> = {
   0: 6, // logging
@@ -73,9 +73,10 @@ export const POI_BIOMES: Record<number, number[]> = {
   [7]: [BIOME.mountain],        // mine
 };
 
-export const POI_ICON_PX = 9;      // badge radius in screen pixels, constant at any zoom
+export const POI_ICON_PX = 9;      // base badge radius; scales with zoom up to POI_ICON_MAX
+export const POI_ICON_MAX = 13;    // badge radius cap when zoomed in
 export const POI_HIT_PX = 12;      // screen-pixel radius for mouse selection
-export const POI_ZONE_ALPHA = 0.07; // placement-zone fill transparency
+export const POI_ZONE_ALPHA = 0.14; // placement-zone fill transparency
 export const POI_COLORS: Record<number, string> = {
   [0]: "#5d8a4e", // logging — forest green
   [1]: "#8b5a3a", // hunting — hide brown
@@ -88,6 +89,30 @@ export const POI_COLORS: Record<number, string> = {
 };
 export const POI_FALLBACK_COLOR = "#999999"; // for POI kinds without an explicit colour
 export const POI_GLYPH_STROKE = "#0d0f16";   // badge outline and glyph ink
+
+export const POI_NAMES: Record<number, string> = {
+  [POI.logging]: "лесосека",
+  [POI.hunting]: "охотничьи угодья",
+  [POI.fishing]: "рыбалка",
+  [POI.salt]: "соляные промыслы",
+  [POI.farm]: "пашня",
+  [POI.pasture]: "пастбище",
+  [POI.quarry]: "каменоломня",
+  [POI.mine]: "рудник",
+};
+
+export const RESOURCE_NAMES: Record<number, string> = {
+  [RESOURCE.wood]: "древесина",
+  [RESOURCE.fur]: "мех",
+  [RESOURCE.fish]: "рыба",
+  [RESOURCE.salt]: "соль",
+  [RESOURCE.grain]: "зерно",
+  [RESOURCE.livestock]: "скот",
+  [RESOURCE.stone]: "камень",
+  [RESOURCE.copper]: "медь",
+  [RESOURCE.iron]: "железо",
+  [RESOURCE.silver]: "серебро",
+};
 
 // camera
 export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits

@@ -1,7 +1,7 @@
 // Terrain rendering: chunks are prerendered once and blitted with the camera.
 import {
   CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP,
-  POI_ICON_PX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
+  POI_ICON_PX, POI_ICON_MAX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
   POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
 } from "./config.ts";
 import type { Poi, World } from "./world.ts";
@@ -159,7 +159,7 @@ function glyph(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number
       ctx.arc(x - r * 0.15, y, r * 0.45, -Math.PI * 0.6, Math.PI * 0.6);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(x + r * 0.15, y, r * 0.45, Math.PI * 0.6, -Math.PI * 0.6, true);
+      ctx.arc(x + r * 0.15, y, r * 0.45, Math.PI * 0.6, -Math.PI * 0.6);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(x + r * 0.25, y);
@@ -247,8 +247,8 @@ export function drawPois(
   for (const p of pois) {
     const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
     const color = POI_COLORS[p.kind] ?? POI_FALLBACK_COLOR;
-    // Scale the badge down at low zoom to stop icons crowding; keep hit radius unchanged.
-    const r = Math.min(POI_ICON_PX, Math.max(3.5, POI_ICON_PX * cam.zoom / 6));
+    // Scale the badge with zoom, but clamp to keep icons readable and avoid crowding.
+    const r = Math.min(POI_ICON_MAX, Math.max(3.5, POI_ICON_PX * cam.zoom / 6));
 
     ctx.beginPath();
     ctx.arc(s.x, s.y, r, 0, Math.PI * 2);

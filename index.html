@@ -14,6 +14,21 @@
         color: #8f9ac4; text-shadow: 0 1px 2px rgba(0,0,0,.9);
       }
       #hud b { color: #ffd76e; font-weight: 600; }
+      .hud-btn {
+        pointer-events: auto;
+        background: rgba(13,15,22,.85);
+        border: 1px solid rgba(140,160,220,.35);
+        color: #cdd6ff;
+        font: inherit;
+        padding: 1px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .hud-btn[aria-pressed="true"] {
+        background: rgba(140,160,220,.25);
+        border-color: rgba(140,160,220,.65);
+        color: #fff;
+      }
       #strip {
         flex: 0 0 var(--strip, 220px); height: var(--strip, 220px);
         display: flex; border-top: 1px solid rgba(140,160,220,.2);
@@ -30,7 +45,7 @@
   </head>
   <body>
     <canvas id="map"></canvas>
-    <div id="hud"><b id="seed">seed 1</b> · <span id="zoom">zoom —</span> · <span id="tile">тайл —</span></div>
+    <div id="hud"><b id="seed">seed 1</b> · <span id="zoom">zoom —</span> · <span id="tile">тайл —</span> · <button id="zones" class="hud-btn" aria-pressed="true" type="button">зоны</button></div>
     <div id="strip">
       <section id="feed">
         <div class="head">лента</div>
@@ -39,8 +54,10 @@
       </section>
       <section id="deals">
         <div class="head">мои дела</div>
-        <div class="row"><b>капитал</b> 12 480</div>
-        <div class="note">сделки, предприятия и рынок — позже</div>
+        <div id="deals-body">
+          <div class="row"><b>капитал</b> 12 480</div>
+          <div class="note">сделки, предприятия и рынок — позже</div>
+        </div>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
