@@ -3,7 +3,7 @@ import { STRIP_H, MAP_W, MAP_H, ZOOM_START } from "./config.ts";
 import { generateWorld, seedFromQuery } from "./gen.ts";
 import { prerender, draw, poiAt } from "./render.ts";
 import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Camera } from "./camera.ts";
-import { poiCard, isClick } from "./poi-card.ts";
+import { poiCard, isClick, declPoints } from "./poi-card.ts";
 import type { Poi } from "./world.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
@@ -121,15 +121,6 @@ canvas.addEventListener("pointerup", (e) => {
 canvas.addEventListener("pointercancel", endDrag);
 
 canvas.addEventListener("pointerleave", () => { cursorEl.textContent = "тайл —"; });
-
-function declPoints(n: number): string {
-  const lastTwo = n % 100;
-  const last = n % 10;
-  if (lastTwo >= 11 && lastTwo <= 14) return "точек";
-  if (last === 1) return "точка";
-  if (last >= 2 && last <= 4) return "точки";
-  return "точек";
-}
 
 function showCard(poi: Poi | null): void {
   const body = $("deals-body");

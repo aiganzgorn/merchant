@@ -48,3 +48,13 @@ export function poiCard(world: World, poi: Poi): PoiCard {
 export function isClick(dx: number, dy: number, threshold: number): boolean {
   return Math.hypot(dx, dy) < threshold;
 }
+
+// Russian declension of "точка" for a count.
+export function declPoints(n: number): string {
+  const lastTwo = n % 100;
+  const last = n % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return "точек";
+  if (last === 1) return "точка";
+  if (last >= 2 && last <= 4) return "точки";
+  return "точек";
+}

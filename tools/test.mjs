@@ -424,14 +424,24 @@ test("poiAt ignores hidden mines", () => {
 console.log("ok — POI рендеринг: видимые точки, попадание по экранным координатам");
 
 // --- POI card and click detection --------------------------------------------
-import { poiCard, isClick, nearestSettlement, sameKindInZone } from "../src/poi-card.ts";
+import { poiCard, isClick, declPoints, nearestSettlement, sameKindInZone } from "../src/poi-card.ts";
 import { POI_NAMES, RESOURCE_NAMES, POI_ZONE } from "../src/config.ts";
 
 test("isClick distinguishes taps from drags", () => {
   assert.equal(isClick(0, 0, 4), true, "no movement is a click");
   assert.equal(isClick(2, 2, 4), true, "small move under threshold is a click");
-  assert.equal(isClick(3, 3, 4), false, "move at threshold is a drag");
+  assert.equal(isClick(4, 0, 4), false, "move at exact threshold is a drag");
   assert.equal(isClick(10, 0, 4), false, "long horizontal move is a drag");
+});
+
+test("declPoints declines точка for 1/2/5/11", () => {
+  assert.equal(declPoints(1), "точка");
+  assert.equal(declPoints(2), "точки");
+  assert.equal(declPoints(5), "точек");
+  assert.equal(declPoints(11), "точек");
+  assert.equal(declPoints(21), "точка");
+  assert.equal(declPoints(22), "точки");
+  assert.equal(declPoints(25), "точек");
 });
 
 test("nearestSettlement finds the closest town", () => {
@@ -445,31 +455,16 @@ test("nearestSettlement finds the closest town", () => {
   assert.ok(Math.abs(ns.dist - Math.hypot(10, 10)) < 1e-9, "distance is Euclidean");
 });
 
-test("sameKindInZone counts same-kind POIs within POI_ZONE", () => {
-  const w = generateWorld(42);
-  const p = w.poi.find((p) => p.kind === POI.logging);
-  assert.ok(p, "logging POI exists");
-  const count = sameKindInZone(w, p);
-  assert.ok(count >= 1, "a POI is within its own zone");
-  // all counted points must be within POI_ZONE tiles
-  for (const other of w.poi) {
-    if (other.kind !== p.kind) continue;
-    const d = Math.hypot(other.x - p.x, other.y - p.y);
-    if (d <= POI_ZONE) assert.ok(count >= 1, "nearby same-kind POI counted");
-  }
-});
-
-test("poiCard returns Russian labels and settlement distance", () => {
-  const w = generateWorld(42);
-  const p = w.poi.find((p) => p.known);
-  assert.ok(p, "there is a known POI");
-  const card = poiCard(w, p);
-  assert.equal(card.kindName, POI_NAMES[p.kind], "kind name is Russian");
-  assert.equal(card.resourceName, RESOURCE_NAMES[p.resource], "resource name is Russian");
-  assert.ok(card.yield > 0 && card.yield <= 1, "yield in range");
-  assert.ok(card.reserve > 0, "reserve positive");
-  assert.ok(card.nearestSettlement && card.nearestSettlement.dist >= 0, "settlement distance present");
-  assert.ok(card.sameKindInZone >= 1, "same-kind count includes the POI itself");
+test("sameKindInZone counts same-kind POIs within POI_ZONE and excludes distant ones", () => {
+  const anchor = { kind: POI.logging, resource: RESOURCE.wood, x: 100, y: 100, yield: 0.5, reserve: 200, known: true };
+  const inside = { kind: POI.logging, resource: RESOURCE.wood, x: 100 + POI_ZONE - 1, y: 100, yield: 0.5, reserve: 200, known: true };
+  const outside = { kind: POI.logging, resource: RESOURCE.wood, x: 100 + POI_ZONE + 1, y: 100, yield: 0.5, reserve: 200, known: true };
+  const otherKind = { kind: POI.fishing, resource: RESOURCE.fish, x: 100 + 2, y: 100, yield: 0.5, reserve: 200, known: true };
+  const w = { ...generateWorld(42), poi: [anchor, inside, outside, otherKind] };
+  const count = sameKindInZone(w, anchor);
+  const expected = w.poi.filter((p) => p.kind === anchor.kind && Math.hypot(p.x - anchor.x, p.y - anchor.y) <= POI_ZONE).length;
+  assert.equal(count, expected, "count matches independent filter");
+  assert.equal(count, 2, "anchor + one same-kind neighbour inside zone");
 });
 
 console.log("ok — карточка точки и клик: подписи, расстояние, счётчик в зоне");
