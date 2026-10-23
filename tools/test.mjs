@@ -424,7 +424,7 @@ test("poiAt ignores hidden mines", () => {
 console.log("ok — POI рендеринг: видимые точки, попадание по экранным координатам");
 
 // --- POI card and click detection --------------------------------------------
-import { poiCard, isClick, declPoints, nearestSettlement, sameKindInZone } from "../src/poi-card.ts";
+import { poiCard, isClick, declPoints, declTiles, nearestSettlement, sameKindInZone } from "../src/poi-card.ts";
 import { POI_NAMES, RESOURCE_NAMES, POI_ZONE } from "../src/config.ts";
 
 test("isClick distinguishes taps from drags", () => {
@@ -442,6 +442,16 @@ test("declPoints declines точка for 1/2/5/11", () => {
   assert.equal(declPoints(21), "точка");
   assert.equal(declPoints(22), "точки");
   assert.equal(declPoints(25), "точек");
+});
+
+test("declTiles declines тайл for 1/2/5/11", () => {
+  assert.equal(declTiles(1), "тайл");
+  assert.equal(declTiles(2), "тайла");
+  assert.equal(declTiles(5), "тайлов");
+  assert.equal(declTiles(11), "тайлов");
+  assert.equal(declTiles(21), "тайл");
+  assert.equal(declTiles(22), "тайла");
+  assert.equal(declTiles(25), "тайлов");
 });
 
 test("nearestSettlement finds the closest town", () => {

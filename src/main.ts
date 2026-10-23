@@ -3,7 +3,7 @@ import { STRIP_H, MAP_W, MAP_H, ZOOM_START } from "./config.ts";
 import { generateWorld, seedFromQuery } from "./gen.ts";
 import { prerender, draw, poiAt } from "./render.ts";
 import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Camera } from "./camera.ts";
-import { poiCard, isClick, declPoints } from "./poi-card.ts";
+import { poiCard, isClick, declPoints, declTiles } from "./poi-card.ts";
 import type { Poi } from "./world.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
@@ -20,6 +20,9 @@ const world = generateWorld(seed);
 const chunks = prerender(world);
 
 $("seed").textContent = `seed ${seed}`;
+
+// Default "мои дела" markup lives in index.html; capture it once for reuse.
+const defaultCardHtml = $("deals-body").innerHTML;
 
 // ?zoom=8 opens the world at a given scale — handy for looking at the whole map.
 const zoomParam = Number(new URLSearchParams(location.search).get("zoom"));
@@ -125,17 +128,17 @@ canvas.addEventListener("pointerleave", () => { cursorEl.textContent = "тайл
 function showCard(poi: Poi | null): void {
   const body = $("deals-body");
   if (!poi) {
-    body.innerHTML = `<div class="row"><b>капитал</b> 12 480</div><div class="note">сделки, предприятия и рынок — позже</div>`;
+    body.innerHTML = defaultCardHtml;
     return;
   }
   const info = poiCard(world, poi);
   const yieldPct = Math.round(info.yield * 100);
-  const dist = info.nearestSettlement ? `${Math.round(info.nearestSettlement.dist)} тайлов` : "нет поселений";
+  const dist = info.nearestSettlement ? `${Math.round(info.nearestSettlement.dist)} ${declTiles(Math.round(info.nearestSettlement.dist))}` : "нет поселений";
   body.innerHTML = `
     <div class="row"><b>${info.kindName}</b> · ${info.resourceName}</div>
     <div class="row">урожайность ${yieldPct}% · запас ${info.reserve}</div>
     <div class="row">ближайшее поселение · ${dist}</div>
-    <div class="row">в зоне ${info.sameKindInZone} ${declPoints(info.sameKindInZone)} этого вида</div>
+    <div class="row">этого вида в зоне: ${info.sameKindInZone} ${declPoints(info.sameKindInZone)} (считая эту)</div>
   `;
 }
 

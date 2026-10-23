@@ -58,3 +58,13 @@ export function declPoints(n: number): string {
   if (last >= 2 && last <= 4) return "точки";
   return "точек";
 }
+
+// Russian declension of "тайл" for a count.
+export function declTiles(n: number): string {
+  const lastTwo = n % 100;
+  const last = n % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return "тайлов";
+  if (last === 1) return "тайл";
+  if (last >= 2 && last <= 4) return "тайла";
+  return "тайлов";
+}
