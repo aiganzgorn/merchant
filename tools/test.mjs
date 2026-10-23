@@ -667,3 +667,77 @@ test("poiCard returns Russian labels and settlement distance", () => {
 });
 
 console.log("ok — карточка точки и клик: подписи, расстояние, счётчик в зоне");
+
+// --- daily tick: needs, production, growth, abandonment ----------------------
+import { stepDay, levelOf, availableTiers, NEED_TIERS } from "../src/settlements.ts";
+import { advance, DAY_SECONDS } from "../src/sim.ts";
+
+assert.equal(levelOf(20), 0);
+assert.equal(levelOf(120), 1);
+assert.equal(levelOf(19999), 4);
+assert.equal(levelOf(20000), 5);
+assert.equal(availableTiers(0), 1);
+assert.equal(availableTiers(3), 3);
+assert.equal(availableTiers(4), 4, "роскошь открывается у города");
+assert.equal(availableTiers(5), 4);
+assert.equal(NEED_TIERS.length, 4);
+
+// день прихода без еды: население падает, но не обнуляется
+// (точки в этих сценариях отключаем: поселение с фермой голодом не убить)
+const hungry = generateWorld(7);
+for (const s of hungry.settlements) { s.stock.fill(0); s.water = true; s.pois = []; }
+const hungryBefore = hungry.settlements.map((s) => s.population);
+stepDay(hungry);
+const hungryAfter = hungry.settlements.map((s) => s.population);
+for (let i = 0; i < hungryBefore.length; i++) assert.ok(hungryAfter[i] < hungryBefore[i], "голод уменьшает население");
+for (let i = 0; i < hungryBefore.length; i++) assert.ok(hungryAfter[i] > hungryBefore[i] * 0.9, "за день теряется меньше 10%");
+
+// сытый хутор растёт
+const fed = generateWorld(8);
+for (const s of fed.settlements) { s.stock[4] = 10_000; s.water = true; } // зерно
+const fedBefore = fed.settlements.map((s) => s.population);
+stepDay(fed);
+for (let i = 0; i < fedBefore.length; i++) assert.ok(fed.settlements[i].population > fedBefore[i], "с едой население растёт");
+
+// без воды — тоже убыль, даже при полной еде
+const dry = generateWorld(9);
+for (const s of dry.settlements) { s.stock[4] = 10_000; s.water = false; s.pois = []; }
+const dryBefore = dry.settlements.map((s) => s.population);
+stepDay(dry);
+for (let i = 0; i < dryBefore.length; i++) assert.ok(dry.settlements[i].population < dryBefore[i], "без воды население падает");
+
+// голод идёт годами: за 30 дней теряется больше трети, за 60 — всё пустеет
+const starved = generateWorld(10);
+for (const s of starved.settlements) { s.stock.fill(0); s.water = false; s.pois = []; }
+const startPop = starved.settlements.map((s) => s.population);
+for (let d = 0; d < 30; d++) stepDay(starved);
+for (let i = 0; i < startPop.length; i++) {
+  if (!starved.settlements[i].abandoned) {
+    assert.ok(starved.settlements[i].population < startPop[i] * 0.7, "за месяц без еды и воды теряется больше трети");
+  }
+}
+for (let d = 0; d < 30; d++) stepDay(starved);
+assert.ok(starved.settlements.every((s) => s.abandoned), "за два месяца без еды и воды всё пустеет");
+
+// точки истощаются: берём каменоломню, у которой есть хозяин
+const mine = generateWorld(11);
+const owner = mine.settlements.find((s) => s.pois.some((i) => mine.poi[i].kind === 6));
+assert.ok(owner, "у каменоломни есть хозяин");
+const quarryIdx = owner.pois.find((i) => mine.poi[i].kind === 6);
+const quarry = mine.poi[quarryIdx];
+const beforeReserve = quarry.reserve;
+mine.settlements.forEach((s) => { s.stock[6] = 10_000; s.water = true; if (s !== owner) s.pois = []; });
+stepDay(mine);
+assert.ok(quarry.reserve < beforeReserve, "каменоломня истощается");
+
+// часы: ×1 — день за 60 с, ×4 — за 15, пауза не идёт
+let sim = { day: 0, speed: 1, acc: 0 };
+sim = advance(sim, DAY_SECONDS);
+assert.equal(sim.day, 1, "×1: день за 60 с");
+sim = { day: 0, speed: 4, acc: 0 };
+sim = advance(sim, DAY_SECONDS / 4);
+assert.equal(sim.day, 1, "×4: день за 15 с");
+sim = { day: 0, speed: 0, acc: 0 };
+sim = advance(sim, 10_000);
+assert.equal(sim.day, 0, "пауза не идёт");
+console.log("ok — сутки: уровни, голод, рост, истощение, часы");

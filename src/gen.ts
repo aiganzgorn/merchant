@@ -129,7 +129,8 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
         known = true;
       }
 
-      poi.push({ kind, resource, x, y, yield: 0.45 + rng() * 0.55, reserve: 160 + Math.floor(rng() * 640), known });
+      const reserve = 160 + Math.floor(rng() * 640);
+      poi.push({ kind, resource, x, y, yield: 0.45 + rng() * 0.55, reserve, reserveMax: reserve, known });
       poiTile[i] = 1;
       placed++;
     }

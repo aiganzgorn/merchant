@@ -93,7 +93,26 @@ export const POI_OWN_RANGE = 90; // tiles within which a POI is owned by the nea
 export const RESOURCE_COUNT = 10;
 export const LEVEL_POP = [20, 120, 600, 2500, 6000, 20000];
 export const LEVEL_NAMES = ["хутор", "деревня", "село", "посад", "город", "столица"];
-export const HOUSES_PER_POP = 5; // people per house, rounded up
+export const LEVEL_NAMES_INSTRUMENTAL = ["хутором", "деревней", "селом", "посадом", "городом", "столицей"];
+export const NEED_TIER_FROM_LEVEL = [0, 1, 2, 4];
+export const HOUSES_PER_POP = 50; // people per house, rounded up
+
+// daily economy
+export const GROWTH_RATE = 0.02;
+export const BOOM_FACTOR = 1.8;
+export const DECLINE_RATE = 0.015;
+export const PRODUCE_PER_DAY = 8;
+export const REGEN_RATE = 0.01;
+export const ABANDON_POP = 20;
+export const FEED_MAX = 60;
+
+export const NEED_TIERS: { label: string; resources: number[]; perCapita: number; water?: boolean }[][] = [
+  [ { label: "еда", resources: [RESOURCE.fish, RESOURCE.grain, RESOURCE.livestock], perCapita: 0.02 },
+    { label: "вода", resources: [], perCapita: 0, water: true } ],
+  [ { label: "древесина и камень", resources: [RESOURCE.wood, RESOURCE.stone], perCapita: 0.01 } ],
+  [ { label: "инструмент", resources: [RESOURCE.copper, RESOURCE.iron], perCapita: 0.004 } ],
+  [ { label: "роскошь", resources: [RESOURCE.salt, RESOURCE.silver], perCapita: 0.002 } ],
+];
 
 export const POI_BIOMES: Record<number, number[]> = {
   [0]: [BIOME.forest],          // logging

@@ -85,6 +85,7 @@ export type Poi = {
   y: number;
   yield: number;
   reserve: number;
+  reserveMax: number;
   known: boolean;
 };
 
