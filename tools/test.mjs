@@ -477,4 +477,18 @@ test("sameKindInZone counts same-kind POIs within POI_ZONE and excludes distant 
   assert.equal(count, 2, "anchor + one same-kind neighbour inside zone");
 });
 
+test("poiCard returns Russian labels and settlement distance", () => {
+  const w = generateWorld(42);
+  const p = w.poi.find((p) => p.known);
+  assert.ok(p, "there is a known POI");
+  const card = poiCard(w, p);
+  assert.equal(card.kindName, POI_NAMES[p.kind], "kind name is Russian");
+  assert.equal(card.resourceName, RESOURCE_NAMES[p.resource], "resource name is Russian");
+  assert.ok(card.yield > 0 && card.yield <= 1, "yield in range");
+  assert.ok(card.reserve > 0, "reserve positive");
+  assert.ok(card.nearestSettlement, "settlement distance present");
+  const expectedDist = Math.min(...w.settlements.map((s) => Math.hypot(s.x - p.x, s.y - p.y)));
+  assert.ok(Math.abs(card.nearestSettlement.dist - expectedDist) < 1e-9, "distance matches independent minimum");
+});
+
 console.log("ok — карточка точки и клик: подписи, расстояние, счётчик в зоне");
