@@ -148,6 +148,23 @@ export const LABEL_FONT_PX = 12;                // settlement name size, px
 export const LABEL_OFFSET = 13;                 // px between a house and its name
 export const LABEL_ZOOM_MIN = 4;                // below this zoom names would be a wall of text
 
+// city layout (tiles)
+export const CITY_CELL = 0.5;          // block pitch of a town plan, tiles
+export const CITY_HOUSE = 0.32;        // house footprint inside a block, tiles
+export const CITY_MAIN_STREET = 0.35;  // how far the main street reaches outside the blocks
+export const CITY_ZOOM = 10;           // px per tile from which a town is drawn as blocks, not an icon
+export const CITY_HOUSE_COLOR = "#101014";
+export const CITY_STREET_COLOR = "#6f5236";
+
+// roads between towns
+export const ROAD_NEIGHBOURS = 2;      // how many nearest towns each town is joined to
+export const ROAD_TILES_PER_DAY = 12;  // terrain-costed tiles a caravan covers per day
+export const ROAD_SEARCH_MARGIN = 40;  // tiles of search box around two towns
+export const ROAD_RIVER_COST = 3;      // fording a river
+export const ROAD_BIOME_COST = [Infinity, 1.2, 1, 1, 1.5, 2.5, 4]; // water, sand, steppe, field, forest, hill, mountain
+export const ROAD_COLOR = "#8a6a44";
+export const ROAD_THIN_ZOOM = 12;      // px per tile above which a road is drawn wider
+
 // world time
 export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world
 export const ZOOM_PICK = 6;           // zoom when the player picks a town from the start list

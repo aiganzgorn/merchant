@@ -5,7 +5,9 @@ import {
   POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
   SETTLEMENT_COLOR, SETTLEMENT_ABANDONED, SETTLEMENT_ICON_MAX,
   SETTLEMENT_LABEL_COLOR, LABEL_FONT_PX, LABEL_OFFSET, LABEL_ZOOM_MIN,
+  CITY_ZOOM, CITY_CELL, CITY_HOUSE_COLOR, CITY_STREET_COLOR, ROAD_COLOR, ROAD_THIN_ZOOM,
 } from "./config.ts";
+import { cityPlan, citySize, type CityPlan } from "./city.ts";
 import type { Poi, Settlement, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
 
@@ -295,10 +297,72 @@ export function settlementAt(world: World, cam: Camera, vw: number, vh: number, 
   return best;
 }
 
+// Town plans are rebuilt only when the house count changes.
+const planCache = new Map<string, CityPlan>();
+function planOf(s: Settlement): CityPlan {
+  const houses = Math.max(1, s.buildings.houses);
+  const key = `${s.x},${s.y},${houses}`;
+  let plan = planCache.get(key);
+  if (!plan) {
+    plan = cityPlan(s.x, s.y, houses);
+    planCache.set(key, plan);
+  }
+  return plan;
+}
+
+// Zoomed in, a town is its own blocks: black houses with streets between them.
+export function drawCities(ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number): void {
+  if (cam.zoom < CITY_ZOOM) return;
+  const origin = worldToScreen(cam, vw, vh, 0, 0);
+  const streetWidth = Math.max(1, CITY_CELL * cam.zoom * 0.4);
+  for (const s of world.settlements) {
+    if (s.abandoned) continue;
+    const plan = planOf(s);
+    const c = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
+    const reach = plan.size * cam.zoom + 40;
+    if (c.x < -reach || c.y < -reach || c.x > vw + reach || c.y > vh + reach) continue;
+
+    ctx.strokeStyle = CITY_STREET_COLOR;
+    ctx.lineWidth = streetWidth;
+    ctx.beginPath();
+    for (const st of plan.streets) {
+      ctx.moveTo(origin.x + st.x1 * cam.zoom, origin.y + st.y1 * cam.zoom);
+      ctx.lineTo(origin.x + st.x2 * cam.zoom, origin.y + st.y2 * cam.zoom);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = CITY_HOUSE_COLOR;
+    const size = Math.max(1, CITY_CELL * cam.zoom * 0.64);
+    for (const h of plan.houses) {
+      ctx.fillRect(origin.x + h.x * cam.zoom, origin.y + h.y * cam.zoom, size, size);
+    }
+  }
+}
+
+// Roads are real paths: brown, thin from afar, wider once you are close enough to follow them.
+export function drawRoads(ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number): void {
+  ctx.strokeStyle = ROAD_COLOR;
+  ctx.lineCap = "round";
+  ctx.lineWidth = cam.zoom >= ROAD_THIN_ZOOM ? Math.min(6, cam.zoom * 0.18) : 1;
+  ctx.beginPath();
+  for (const r of world.roads) {
+    if (r.tiles.length < 2) continue;
+    const first = worldToScreen(cam, vw, vh, (r.tiles[0] % world.w) + 0.5, ((r.tiles[0] / world.w) | 0) + 0.5);
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < r.tiles.length; i++) {
+      const t = r.tiles[i];
+      const p = worldToScreen(cam, vw, vh, (t % world.w) + 0.5, ((t / world.w) | 0) + 0.5);
+      ctx.lineTo(p.x, p.y);
+    }
+  }
+  ctx.stroke();
+}
+
 // Houses sit above POI badges: a town is the main thing on the map.
 export function drawSettlements(
   ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number,
 ): void {
+  if (cam.zoom >= CITY_ZOOM) return; // blocks take over
   for (const s of world.settlements) {
     const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
     const r = Math.min(SETTLEMENT_ICON_MAX, Math.max(4, POI_ICON_PX * cam.zoom / 6));
@@ -337,7 +401,10 @@ export function layoutSettlementLabels(
     const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
     const w = Math.ceil(measure(s.name));
     const x = Math.round(p.x - w / 2);
-    const y = Math.round(p.y - LABEL_OFFSET - h);
+    const lift = cam.zoom >= CITY_ZOOM
+      ? (citySize(Math.max(1, s.buildings.houses)).h * cam.zoom) / 2 + 4
+      : LABEL_OFFSET;
+    const y = Math.round(p.y - lift - h);
     if (x < 0 || y < 0 || x + w > vw || y + h > vh) continue;
     if (placed.some((o) => x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h)) continue;
     placed.push({ text: s.name, x, y, w, h });
@@ -380,7 +447,9 @@ export function draw(
   }
 
   drawRivers(ctx, world, cam, vw, vh);
+  drawRoads(ctx, world, cam, vw, vh);
   drawPois(ctx, world, cam, vw, vh, zones);
+  drawCities(ctx, world, cam, vw, vh);
   drawSettlements(ctx, world, cam, vw, vh);
   drawSettlementLabels(ctx, world, cam, vw, vh);
 }

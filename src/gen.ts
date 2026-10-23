@@ -2,6 +2,7 @@
 import { mulberry32, int, type Rng } from "./rng.ts";
 import { BIOME, POI, RESOURCE, type World, type Poi, type Settlement } from "./world.ts";
 import { buildRegions, createNamer, nearestRegion } from "./names.ts";
+import { buildRoads } from "./roads.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST, LAND_SHARE,
@@ -737,7 +738,9 @@ export function generateWorld(seed: number): World {
     if (si >= 0) settlements[si].pois.push(pi);
   }
 
-  return { ...worldBase, regionOf, cultures, namer };
+  const roads = buildRoads({ ...worldBase, settlements } as World);
+
+  return { ...worldBase, regionOf, cultures, namer, roads };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.

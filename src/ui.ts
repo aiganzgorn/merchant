@@ -3,6 +3,7 @@
 import type { Settlement, World } from "./world.ts";
 import type { Sim } from "./sim.ts";
 import { settlementCard } from "./settlements.ts";
+import { roadsOf } from "./roads.ts";
 import { FEED_MAX, LEVEL_NAMES, RESOURCE_NAMES } from "./config.ts";
 
 const DEFAULT_DEALS_HTML =
@@ -43,10 +44,15 @@ export function settlementCardHtml(world: World, s: Settlement): string {
       return `<div class="row">${mark} ${n.label} · ${amount}</div>`;
     })
     .join("");
+  const links = roadsOf(world, world.settlements.indexOf(s))
+    .slice(0, 3)
+    .map((l) => `${l.other.name} ${l.days} дн`)
+    .join(" · ");
   return (
     `<div class="row"><b>${s.name}</b> · ${card.levelName}${s.abandoned ? " · заброшен" : ""}</div>` +
     `<div class="row">население ${Math.round(s.population)} · домов ${s.buildings.houses}</div>` +
     `<div class="row">угодья: ${ownedResources(world, s) || "нет"}</div>` +
+    (links ? `<div class="row">дороги: ${links}</div>` : "") +
     needs
   );
 }

@@ -18,10 +18,13 @@ export type World = {
   waterLevel: number;      // elevation below which a tile is sea
   poi: Poi[];              // points of interest: resources and hidden ore
   settlements: Settlement[]; // first towns placed near water or forest
+  roads: Road[];           // paths between towns, with their journey in days
   regionOf: Int16Array;    // region id per tile, -1 for walls and water
   cultures: CultureRegion[]; // regions with their naming character
   namer: Namer;            // deterministic settlement / enterprise / state namer
 };
+
+export type Road = { a: number; b: number; tiles: number[]; days: number };
 
 export type CultureRegion = {
   id: number;

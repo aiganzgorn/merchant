@@ -976,3 +976,60 @@ console.log("ok — подписи поселений: в кадре, без н�
   assert.ok(slavic.length >= 5, `славянских имён ${slavic.length}, ждём ≥5`);
   console.log(`ok — крупные края и имена: ${sample.slice(0, 6).join(", ")}`);
 }
+
+// --- планировка города и дороги -------------------------------------------------
+import { cityPlan } from "../src/city.ts";
+import { buildRoads, roadsOf } from "../src/roads.ts";
+
+{
+  const small = cityPlan(100, 100, 2);
+  const big = cityPlan(100, 100, 400);
+  assert.equal(small.houses.length, 2, "домов на хуторе столько же, сколько посчитал город");
+  assert.equal(big.houses.length, 400, "домов в столице 400");
+  assert.ok(big.size > small.size * 5, "площадь растёт с числом домов");
+
+  for (const h of big.houses) {
+    assert.ok(h.s > 0 && h.s < 0.5, `дом ${h.s} тайла — виден, но не на весь квартал`);
+  }
+  for (let i = 0; i < big.houses.length; i++) {
+    for (let j = i + 1; j < big.houses.length; j++) {
+      const a = big.houses[i], b = big.houses[j];
+      assert.ok(!(a.x < b.x + b.s && b.x < a.x + a.s && a.y < b.y + b.s && b.y < a.y + a.s), "дома не накладываются");
+    }
+  }
+  const cx = big.houses.reduce((m, h) => m + h.x + h.s / 2, 0) / big.houses.length;
+  assert.ok(Math.abs(cx - 100.5) < 0.5, `план центрирован: ${cx}`);
+  assert.ok(big.streets.length >= 3, "в городе есть улицы");
+  assert.deepEqual(cityPlan(100, 100, 400), big, "планировка детерминирована");
+  console.log("ok — планировка города: 2 и 400 домов, улицы, детерминизм");
+}
+
+{
+  const w = generateWorld(42);
+  const roads = buildRoads(w);
+  assert.ok(roads.length >= w.settlements.length, `дорог ${roads.length}, городов ${w.settlements.length}`);
+
+  for (const r of roads) {
+    assert.ok(r.days >= 1, `дорога ${r.a}—${r.b} занимает ${r.days} дней`);
+    assert.ok(r.tiles.length > 1, "у дороги есть путь");
+    for (let i = 1; i < r.tiles.length; i++) {
+      const p = r.tiles[i - 1], q = r.tiles[i];
+      const dx = Math.abs((p % w.w) - (q % w.w));
+      const dy = Math.abs(((p / w.w) | 0) - ((q / w.w) | 0));
+      assert.ok(dx <= 1 && dy <= 1, "шаг дороги — соседний тайл");
+      assert.ok(!w.water[q], "дорога не идёт по открытой воде");
+    }
+    assert.equal(r.tiles[0], w.settlements[r.a].y * w.w + w.settlements[r.a].x, "путь начинается в городе");
+    assert.equal(r.tiles.at(-1), w.settlements[r.b].y * w.w + w.settlements[r.b].x, "и приходит в город");
+  }
+
+  for (let i = 0; i < w.settlements.length; i++) {
+    const links = roadsOf(w, i);
+    assert.ok(links.length >= 1, `у города ${w.settlements[i].name} нет дорог`);
+    for (const l of links) assert.ok(l.days >= 1 && l.other.name.length > 0, "у дороги есть срок и сосед");
+  }
+
+  const again = buildRoads(generateWorld(42));
+  assert.deepEqual(again.map((r) => [r.a, r.b, r.days]), roads.map((r) => [r.a, r.b, r.days]), "дороги детерминированы");
+  console.log(`ok — дороги: ${roads.length} путей, шаги по тайлам, без воды, сроки, детерминизм`);
+}
