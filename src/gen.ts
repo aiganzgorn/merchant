@@ -1,6 +1,6 @@
 // Procedural world from a seed: elevation, mountain seams, moisture, biomes, rivers.
-import { mulberry32 } from "./rng.ts";
-import { BIOME, type World } from "./world.ts";
+import { mulberry32, int, type Rng } from "./rng.ts";
+import { BIOME, POI, RESOURCE, type World, type Poi, type Settlement } from "./world.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST, LAND_SHARE,
@@ -9,6 +9,7 @@ import {
   PLATE_PASS, PLATE_PASS_WIDTH,
   RIVER_COUNT, RIVER_MIN_CATCHMENT, RIVER_MEANDER, RIVER_MEANDER_SCALE,
   LAKE_SHARE, LAKE_MAX_RISE, LAKE_MIN_AREA, RIVER_MIN_LEN,
+  POI_COUNTS, POI_MIN_GAP, POI_BIOMES, SETTLEMENT_COUNT, SETTLEMENT_REACH,
 } from "./config.ts";
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -46,6 +47,67 @@ function normalize(values: Float32Array): void {
   for (const v of values) { if (v < min) min = v; if (v > max) max = v; }
   const span = max - min || 1;
   for (let i = 0; i < values.length; i++) values[i] = (values[i] - min) / span;
+}
+
+// Place points of interest on valid biomes, then scatter first settlements near
+// fishing or logging POIs. Mines are hidden until discovered; everything else is known.
+function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, w: number, h: number): { poi: Poi[]; settlements: Settlement[] } {
+  const poi: Poi[] = [];
+  const n = w * h;
+
+  for (let kind: number = POI.logging; kind <= POI.mine; kind++) {
+    const count = POI_COUNTS[kind] ?? 0;
+    const allowed = POI_BIOMES[kind];
+    if (!count || !allowed) continue;
+
+    let placed = 0;
+    for (let attempt = 0; attempt < count * 40 && placed < count; attempt++) {
+      const i = int(rng, n);
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (!allowed.includes(biome[i])) continue;
+
+      let tooClose = false;
+      for (const p of poi) {
+        if (p.kind !== kind) continue;
+        if (Math.max(Math.abs(p.x - x), Math.abs(p.y - y)) < POI_MIN_GAP) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+
+      let resource: number, known: boolean;
+      if (kind === POI.mine) {
+        const ore = fbm(seed + 9100, x, y, 40, 2);
+        resource = ore < 1 / 3 ? RESOURCE.copper : ore < 2 / 3 ? RESOURCE.iron : RESOURCE.silver;
+        known = false;
+      } else {
+        resource = kind; // logging..quarry map 1:1 to wood..stone
+        known = true;
+      }
+
+      poi.push({ kind, resource, x, y, yield: 0.45 + rng() * 0.55, reserve: 160 + Math.floor(rng() * 640), known });
+      placed++;
+    }
+  }
+
+  const settlements: Settlement[] = [];
+  const anchors = poi.filter(p => p.kind === POI.fishing || p.kind === POI.logging);
+  for (let s = 0; s < SETTLEMENT_COUNT; s++) {
+    if (anchors.length === 0) break;
+    const base = anchors[int(rng, anchors.length)];
+    const options: Settlement[] = [];
+    for (let dy = -SETTLEMENT_REACH; dy <= SETTLEMENT_REACH; dy++) {
+      for (let dx = -SETTLEMENT_REACH; dx <= SETTLEMENT_REACH; dx++) {
+        const nx = base.x + dx, ny = base.y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (water[ny * w + nx]) continue;
+        options.push({ x: nx, y: ny });
+      }
+    }
+    if (options.length === 0) continue;
+    settlements.push(options[int(rng, options.length)]);
+  }
+
+  return { poi, settlements };
 }
 
 export function generateWorld(seed: number): World {
@@ -417,7 +479,9 @@ export function generateWorld(seed: number): World {
     }
   }
 
-  return { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains };
+  const { poi, settlements } = placePoi(rng, seed, biome, water, w, h);
+
+  return { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains, poi, settlements };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.

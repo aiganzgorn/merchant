@@ -16,6 +16,8 @@ export type World = {
   riverChains: number[][]; // each river as an ordered list of tiles, source → mouth
   lakes: number;           // standing-water tiles beyond the ocean
   waterLevel: number;      // elevation below which a tile is sea
+  poi: Poi[];              // points of interest: resources and hidden ore
+  settlements: Settlement[]; // first towns placed near water or forest
 };
 
 export const BIOME = {
@@ -29,5 +31,42 @@ export const BIOME = {
 } as const;
 
 export type Biome = (typeof BIOME)[keyof typeof BIOME];
+
+// Things the player can discover and exploit.
+export const POI = {
+  logging: 0,
+  hunting: 1,
+  fishing: 2,
+  salt: 3,
+  farm: 4,
+  pasture: 5,
+  quarry: 6,
+  mine: 7,
+} as const;
+
+export const RESOURCE = {
+  wood: 0,
+  fur: 1,
+  fish: 2,
+  salt: 3,
+  grain: 4,
+  livestock: 5,
+  stone: 6,
+  copper: 7,
+  iron: 8,
+  silver: 9,
+} as const;
+
+export type Poi = {
+  kind: number;
+  resource: number;
+  x: number;
+  y: number;
+  yield: number;
+  reserve: number;
+  known: boolean;
+};
+
+export type Settlement = { x: number; y: number };
 
 export const idx = (w: World, x: number, y: number): number => y * w.w + x;

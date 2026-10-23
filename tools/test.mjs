@@ -22,8 +22,10 @@ console.log("ok — rng: детерминизм и диапазон");
 
 // --- terrain, moisture, biomes -----------------------------------------------
 import { generateWorld, seedFromQuery } from "../src/gen.ts";
-import { BIOME, idx } from "../src/world.ts";
-import { MAP_W, MAP_H } from "../src/config.ts";
+import { BIOME, idx, POI } from "../src/world.ts";
+import { MAP_W, MAP_H, POI_MIN_GAP, SETTLEMENT_REACH } from "../src/config.ts";
+
+const test = (name, fn) => fn();
 
 const seedA = generateWorld(42), seedB = generateWorld(42);
 assert.deepEqual(seedA.biome, seedB.biome, "один seed — один рельеф");
@@ -348,3 +350,40 @@ for (let s = 1; s <= 10; s++) {
 }
 
 console.log("ok — крайние случаи: колесо, углы, случайные панорамы, реки на десяти seed-ах");
+
+// --- points of interest and settlements ---------------------------------------
+
+test("точки: биом, запасы, скрытая руда, поселения", () => {
+  const w = generateWorld(42);
+  const allowed = { [POI.logging]: [BIOME.forest], [POI.hunting]: [BIOME.forest],
+    [POI.fishing]: [BIOME.water], [POI.salt]: [BIOME.water, BIOME.sand],
+    [POI.farm]: [BIOME.field], [POI.pasture]: [BIOME.steppe],
+    [POI.quarry]: [BIOME.hill, BIOME.mountain], [POI.mine]: [BIOME.mountain] };
+  assert.ok(w.poi.length > 40, `точек ${w.poi.length}`);
+  for (const p of w.poi) {
+    assert.ok(allowed[p.kind].includes(w.biome[p.y * w.w + p.x]), `точка ${p.kind} не на своём биоме`);
+    assert.ok(p.reserve > 0 && p.yield > 0 && p.yield <= 1);
+  }
+  for (const kind of [POI.logging, POI.hunting, POI.fishing, POI.salt, POI.farm, POI.pasture, POI.quarry]) {
+    assert.ok(w.poi.filter((p) => p.kind === kind).length > 0, `нет точек вида ${kind}`);
+  }
+  const mines = w.poi.filter((p) => p.kind === POI.mine);
+  assert.ok(mines.length > 0, "руд нет в данных");
+  assert.ok(mines.every((p) => !p.known), "руда не должна быть известна");
+  assert.ok(w.poi.filter((p) => p.kind !== POI.mine).every((p) => p.known), "остальные точки известны");
+  // same kind never crowds
+  for (const a of w.poi) for (const b of w.poi) {
+    if (a === b || a.kind !== b.kind) continue;
+    assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) >= POI_MIN_GAP, "две точки одного вида слишком близко");
+  }
+  // settlements stand next to water or forest, on dry land
+  assert.ok(w.settlements.length >= 12, `поселений ${w.settlements.length}`);
+  for (const s of w.settlements) {
+    assert.ok(!w.water[s.y * w.w + s.x], "поселение в воде");
+    assert.ok(w.poi.some((p) => (p.kind === POI.fishing || p.kind === POI.logging)
+      && Math.max(Math.abs(p.x - s.x), Math.abs(p.y - s.y)) <= SETTLEMENT_REACH), "поселение без воды и леса рядом");
+  }
+  assert.deepEqual(generateWorld(42).poi, w.poi, "точки должны быть детерминированы");
+});
+
+console.log("ok — точки интереса и поселения: биомы, запасы, скрытая руда, близость воды/леса");

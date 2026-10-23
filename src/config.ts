@@ -44,6 +44,35 @@ export const LAKE_MAX_RISE = 0.35;   // lakes sit below this height above the se
 export const LAKE_MIN_AREA = 16;     // smaller pools are wetlands, not lakes
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
+// points of interest and settlements
+import { BIOME } from "./world.ts";
+
+export const POI_COUNTS: Record<number, number> = {
+  0: 6, // logging
+  1: 6, // hunting
+  2: 6, // fishing
+  3: 4, // salt
+  4: 6, // farm
+  5: 6, // pasture
+  6: 6, // quarry
+  7: 6, // mine
+};
+export const POI_MIN_GAP = 10;    // tiles between POIs of the same kind
+export const POI_ZONE = 40;       // placement radius from a settlement anchor (reserved for future use)
+export const SETTLEMENT_COUNT = 24; // first towns to seed the map
+export const SETTLEMENT_REACH = 6; // tiles a town may stand from a fishing or logging POI
+
+export const POI_BIOMES: Record<number, number[]> = {
+  [0]: [BIOME.forest],          // logging
+  [1]: [BIOME.forest],          // hunting
+  [2]: [BIOME.water],           // fishing
+  [3]: [BIOME.water, BIOME.sand], // salt
+  [4]: [BIOME.field],           // farm
+  [5]: [BIOME.steppe],          // pasture
+  [6]: [BIOME.hill, BIOME.mountain], // quarry
+  [7]: [BIOME.mountain],        // mine
+};
+
 // camera
 export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits
 export const ZOOM_MAX = 48;      // px per tile, closest
