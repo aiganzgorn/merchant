@@ -58,7 +58,7 @@ export const POI_COUNTS: Record<number, number> = {
   7: 6, // mine
 };
 export const POI_MIN_GAP = 10;    // tiles between POIs of the same kind
-export const POI_ZONE = 22;       // placement radius from a settlement anchor, px on screen = * cam.zoom
+export const POI_ZONE = 22;       // radius drawn around a POI and used by its card, tiles
 export const SETTLEMENT_COUNT = 24; // first towns to seed the map
 export const SETTLEMENT_REACH = 6; // tiles a town may stand from a fishing or logging POI
 

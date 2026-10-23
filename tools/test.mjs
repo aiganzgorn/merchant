@@ -23,7 +23,7 @@ console.log("ok — rng: детерминизм и диапазон");
 // --- terrain, moisture, biomes -----------------------------------------------
 import { generateWorld, seedFromQuery } from "../src/gen.ts";
 import { BIOME, idx, POI, RESOURCE } from "../src/world.ts";
-import { MAP_W, MAP_H, POI_MIN_GAP, SETTLEMENT_REACH } from "../src/config.ts";
+import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH } from "../src/config.ts";
 
 const test = (name, fn) => fn();
 
@@ -376,15 +376,51 @@ test("точки: биом, запасы, скрытая руда, поселе�
     if (a === b || a.kind !== b.kind) continue;
     assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) >= POI_MIN_GAP, "две точки одного вида слишком близко");
   }
-  // settlements stand next to water or forest, on dry land
+  // settlements stand next to water or forest, on dry flat land
   assert.ok(w.settlements.length >= 12, `поселений ${w.settlements.length}`);
+  const settlementTiles = new Set();
   for (const s of w.settlements) {
     assert.ok(!w.water[s.y * w.w + s.x], "поселение в воде");
+    const sb = w.biome[s.y * w.w + s.x];
+    assert.ok(sb !== BIOME.hill && sb !== BIOME.mountain, "поселение на холме или горе");
+    assert.ok(!settlementTiles.has(`${s.x},${s.y}`), "два поселения на одном тайле");
+    settlementTiles.add(`${s.x},${s.y}`);
+    assert.ok(!w.poi.some((p) => p.x === s.x && p.y === s.y), "поселение на точке интереса");
     assert.ok(w.poi.some((p) => (p.kind === POI.fishing || p.kind === POI.logging)
       && Math.max(Math.abs(p.x - s.x), Math.abs(p.y - s.y)) <= SETTLEMENT_REACH), "поселение без воды и леса рядом");
   }
+  // no POI sits on the same tile as its nearest settlement
+  for (const p of w.poi) {
+    const ns = Math.min(...w.settlements.map((s) => Math.hypot(s.x - p.x, s.y - p.y)), Infinity);
+    assert.ok(ns > 0, "ближайшее поселение не на том же тайле, что и точка");
+  }
   assert.deepEqual(generateWorld(42).poi, w.poi, "точки должны быть детерминированы");
 });
+
+// every kind reaches its target count on the checked seeds
+for (const seed of [1, 8, 42, 1000]) {
+  const w = generateWorld(seed);
+  for (const kind of [POI.logging, POI.hunting, POI.fishing, POI.salt, POI.farm, POI.pasture, POI.quarry, POI.mine]) {
+    const count = w.poi.filter((p) => p.kind === kind).length;
+    assert.equal(count, POI_COUNTS[kind], `seed ${seed}: вид ${kind} — ${count} вместо ${POI_COUNTS[kind]}`);
+  }
+}
+
+// all three ore types appear across the first ten seeds, and seed 42 is not single-type
+{
+  const seen = new Set();
+  for (let s = 1; s <= 10; s++) {
+    for (const p of generateWorld(s).poi) {
+      if (p.kind === POI.mine) seen.add(p.resource);
+    }
+  }
+  assert.ok(seen.has(RESOURCE.copper), "медная руда встречается");
+  assert.ok(seen.has(RESOURCE.iron), "железная руда встречается");
+  assert.ok(seen.has(RESOURCE.silver), "серебряная руда встречается");
+
+  const ore42 = generateWorld(42).poi.filter((p) => p.kind === POI.mine).map((p) => p.resource);
+  assert.ok(new Set(ore42).size > 1, "на seed 42 не один тип руды");
+}
 
 console.log("ok — точки интереса и поселения: биомы, запасы, скрытая руда, близость воды/леса");
 

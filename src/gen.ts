@@ -54,18 +54,30 @@ function normalize(values: Float32Array): void {
 function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, w: number, h: number): { poi: Poi[]; settlements: Settlement[] } {
   const poi: Poi[] = [];
   const n = w * h;
+  const poiTile = new Uint8Array(n);
 
   for (let kind: number = POI.logging; kind <= POI.mine; kind++) {
     const count = POI_COUNTS[kind] ?? 0;
     const allowed = POI_BIOMES[kind];
     if (!count || !allowed) continue;
 
+    // Deterministic candidate list for this kind's allowed biomes, shuffled once.
+    const candidates: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (allowed.includes(biome[i])) candidates.push(i);
+    }
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = int(rng, i + 1);
+      const tmp = candidates[i];
+      candidates[i] = candidates[j];
+      candidates[j] = tmp;
+    }
+
     let placed = 0;
-    for (let attempt = 0; attempt < count * 40 && placed < count; attempt++) {
-      const i = int(rng, n);
+    for (const i of candidates) {
+      if (placed >= count) break;
       const x = i % w;
       const y = (i / w) | 0;
-      if (!allowed.includes(biome[i])) continue;
 
       let tooClose = false;
       for (const p of poi) {
@@ -76,7 +88,8 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
 
       let resource: number, known: boolean;
       if (kind === POI.mine) {
-        const ore = fbm(seed + 9100, x, y, 40, 2);
+        // Uniform per-tile hash keeps copper / iron / silver roughly balanced.
+        const ore = hash2(seed + 9100, x, y);
         resource = ore < 1 / 3 ? RESOURCE.copper : ore < 2 / 3 ? RESOURCE.iron : RESOURCE.silver;
         known = false;
       } else {
@@ -85,11 +98,13 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
       }
 
       poi.push({ kind, resource, x, y, yield: 0.45 + rng() * 0.55, reserve: 160 + Math.floor(rng() * 640), known });
+      poiTile[i] = 1;
       placed++;
     }
   }
 
   const settlements: Settlement[] = [];
+  const occupied = new Uint8Array(n);
   const anchors = poi.filter(p => p.kind === POI.fishing || p.kind === POI.logging);
   for (let s = 0; s < SETTLEMENT_COUNT; s++) {
     if (anchors.length === 0) break;
@@ -99,12 +114,17 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
       for (let dx = -SETTLEMENT_REACH; dx <= SETTLEMENT_REACH; dx++) {
         const nx = base.x + dx, ny = base.y + dy;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        if (water[ny * w + nx]) continue;
+        const j = ny * w + nx;
+        const b = biome[j];
+        if (b === BIOME.water || b === BIOME.hill || b === BIOME.mountain) continue;
+        if (occupied[j] || poiTile[j]) continue;
         options.push({ x: nx, y: ny });
       }
     }
     if (options.length === 0) continue;
-    settlements.push(options[int(rng, options.length)]);
+    const choice = options[int(rng, options.length)];
+    occupied[choice.y * w + choice.x] = 1;
+    settlements.push(choice);
   }
 
   return { poi, settlements };
