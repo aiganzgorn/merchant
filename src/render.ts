@@ -5,9 +5,11 @@ import {
   POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
   SETTLEMENT_COLOR, SETTLEMENT_ABANDONED, SETTLEMENT_ICON_MAX,
   SETTLEMENT_LABEL_COLOR, LABEL_FONT_PX, LABEL_OFFSET, LABEL_ZOOM_MIN,
+  LABEL_SUB_FONT_PX, LABEL_LINE_GAP, LABEL_SUB_COLOR,
   CITY_ZOOM, CITY_CELL, CITY_HOUSE_COLOR, CITY_STREET_COLOR, ROAD_COLOR, ROAD_THIN_ZOOM,
 } from "./config.ts";
 import { cityPlan, citySize, type CityPlan } from "./city.ts";
+import { townSubline } from "./ui.ts";
 import type { Poi, Settlement, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
 
@@ -386,20 +388,26 @@ export function drawSettlements(
   }
 }
 
-export type SettlementLabel = { text: string; x: number; y: number; w: number; h: number };
+export type SettlementLabel = {
+  name: string; sub: string; x: number; y: number; w: number; h: number;
+};
+
+const LABEL_BLOCK_H = LABEL_FONT_PX + LABEL_LINE_GAP + LABEL_SUB_FONT_PX;
 
 // Greedy label placement: biggest towns claim their name first, a name that would
 // overlap one already placed is dropped until the map is zoomed in further.
 export function layoutSettlementLabels(
-  world: World, cam: Camera, vw: number, vh: number, measure: (text: string) => number,
+  world: World, cam: Camera, vw: number, vh: number,
+  measure: (text: string, fontPx: number) => number,
 ): SettlementLabel[] {
   if (cam.zoom < LABEL_ZOOM_MIN) return [];
-  const h = LABEL_FONT_PX;
+  const h = LABEL_BLOCK_H;
   const placed: SettlementLabel[] = [];
   const towns = world.settlements.filter((s) => !s.abandoned).sort((a, b) => b.population - a.population);
   for (const s of towns) {
     const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
-    const w = Math.ceil(measure(s.name));
+    const sub = townSubline(s);
+    const w = Math.ceil(Math.max(measure(s.name, LABEL_FONT_PX), measure(sub, LABEL_SUB_FONT_PX)));
     const x = Math.round(p.x - w / 2);
     const lift = cam.zoom >= CITY_ZOOM
       ? (citySize(Math.max(1, s.buildings.houses)).h * cam.zoom) / 2 + 4
@@ -407,24 +415,36 @@ export function layoutSettlementLabels(
     const y = Math.round(p.y - lift - h);
     if (x < 0 || y < 0 || x + w > vw || y + h > vh) continue;
     if (placed.some((o) => x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h)) continue;
-    placed.push({ text: s.name, x, y, w, h });
+    placed.push({ name: s.name, sub, x, y, w, h });
   }
   return placed;
 }
 
+const LABEL_FAMILY = "ui-monospace, SFMono-Regular, Menlo, monospace";
+
 export function drawSettlementLabels(
   ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number,
 ): void {
-  ctx.font = `${LABEL_FONT_PX}px ui-monospace, SFMono-Regular, Menlo, monospace`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  const placed = layoutSettlementLabels(world, cam, vw, vh, (text) => ctx.measureText(text).width);
   ctx.lineJoin = "round";
   ctx.lineWidth = 3;
   ctx.strokeStyle = POI_GLYPH_STROKE;
-  for (const l of placed) ctx.strokeText(l.text, l.x, l.y);
-  ctx.fillStyle = SETTLEMENT_LABEL_COLOR;
-  for (const l of placed) ctx.fillText(l.text, l.x, l.y);
+  ctx.font = `${LABEL_FONT_PX}px ${LABEL_FAMILY}`;
+  const placed = layoutSettlementLabels(world, cam, vw, vh,
+    (text, px) => { ctx.font = `${px}px ${LABEL_FAMILY}`; return ctx.measureText(text).width; });
+
+  for (const l of placed) {
+    ctx.font = `${LABEL_FONT_PX}px ${LABEL_FAMILY}`;
+    ctx.fillStyle = SETTLEMENT_LABEL_COLOR;
+    ctx.strokeText(l.name, l.x, l.y);
+    ctx.fillText(l.name, l.x, l.y);
+    ctx.font = `${LABEL_SUB_FONT_PX}px ${LABEL_FAMILY}`;
+    ctx.fillStyle = LABEL_SUB_COLOR;
+    const sy = l.y + LABEL_FONT_PX + LABEL_LINE_GAP;
+    ctx.strokeText(l.sub, l.x, sy);
+    ctx.fillText(l.sub, l.x, sy);
+  }
 }
 
 export function draw(

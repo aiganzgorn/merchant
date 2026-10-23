@@ -145,6 +145,9 @@ export const SETTLEMENT_COLOR = "#ffd76e";     // a living town
 export const SETTLEMENT_ABANDONED = "#59618a"; // an abandoned one — outline only
 export const SETTLEMENT_ICON_MAX = 14;         // px radius cap when zoomed in
 export const LABEL_FONT_PX = 12;                // settlement name size, px
+export const LABEL_SUB_FONT_PX = 10;            // population line under the name, px
+export const LABEL_LINE_GAP = 1;                // gap between the two label lines, px
+export const LABEL_SUB_COLOR = "#d8cba4";       // population line ink, dimmer than the name
 export const LABEL_OFFSET = 13;                 // px between a house and its name
 export const LABEL_ZOOM_MIN = 4;                // below this zoom names would be a wall of text
 

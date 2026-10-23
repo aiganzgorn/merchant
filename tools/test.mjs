@@ -914,25 +914,27 @@ import { layoutSettlementLabels } from "../src/render.ts";
 
 const labelWorld = generateWorld(42);
 const labelCam = { x: labelWorld.settlements[0].x, y: labelWorld.settlements[0].y, zoom: 8 };
-const measure = (text) => text.length * 7;
+const measure = (text, px) => text.length * px * 0.6;
 const labels = layoutSettlementLabels(labelWorld, labelCam, 900, 600, measure);
 assert.ok(labels.length > 0, "на карте есть подписи");
 assert.ok(labels.length <= labelWorld.settlements.length, "подписей не больше, чем поселений");
 for (const l of labels) {
-  assert.ok(labelWorld.settlements.some((s) => s.name === l.text), `подпись принадлежит поселению: ${l.text}`);
-  assert.ok(l.x >= 0 && l.x + l.w <= 900, `подпись ${l.text} в кадре по x`);
-  assert.ok(l.y >= 0 && l.y + l.h <= 600, `подпись ${l.text} в кадре по y`);
+  assert.ok(labelWorld.settlements.some((s) => s.name === l.name), `подпись принадлежит поселению: ${l.name}`);
+  assert.ok(/\d+ душ/.test(l.sub) && /\d+ дом/.test(l.sub) && /\d+ предпр/.test(l.sub), `подпись считает жителей, дома и предприятия: ${l.sub}`);
+  assert.ok(l.x >= 0 && l.x + l.w <= 900, `подпись ${l.name} в кадре по x`);
+  assert.ok(l.y >= 0 && l.y + l.h <= 600, `подпись ${l.name} в кадре по y`);
 }
 for (let i = 0; i < labels.length; i++) {
   for (let j = i + 1; j < labels.length; j++) {
     const a = labels[i], b = labels[j];
     const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-    assert.ok(!overlap, `подписи ${a.text} и ${b.text} не накладываются`);
+    assert.ok(!overlap, `подписи ${a.name} и ${b.name} не накладываются`);
   }
 }
 assert.equal(layoutSettlementLabels(labelWorld, { ...labelCam, zoom: 1.2 }, 900, 600, measure).length, 0, "на общем плане подписи скрыты");
 
-console.log("ok — подписи поселений: в кадре, без наложений, скрыты на общем плане");
+assert.ok(labels[0].name.length > 0 && labels[0].sub.length > 0, "у подписи есть имя и строка жителей");
+console.log(`ok — подписи поселений: в кадре, без наложений, скрыты на общем плане`, `(${labels.length})`);
 
 // --- крупное деление мира и разнообразие имён ----------------------------------
 {

@@ -6,6 +6,21 @@ import { settlementCard } from "./settlements.ts";
 import { roadsOf } from "./roads.ts";
 import { FEED_MAX, LEVEL_NAMES, RESOURCE_NAMES } from "./config.ts";
 
+function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+// The line under a town's name on the map: people, houses, enterprises.
+export function townSubline(s: Settlement): string {
+  const people = Math.round(s.population);
+  const houses = s.buildings.houses;
+  const firms = s.buildings.admin + s.buildings.industry + s.buildings.trade;
+  return `${people} ${plural(people, "душа", "души", "душ")} · ${houses} ${plural(houses, "дом", "дома", "домов")} · ${firms} предпр.`;
+}
+
 const DEFAULT_DEALS_HTML =
   `<div class="row"><b>капитал</b> 12 480</div>` +
   `<div class="note">сделки, предприятия и рынок — позже</div>`;
