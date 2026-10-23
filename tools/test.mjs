@@ -1009,7 +1009,7 @@ import { buildRoads, roadsOf } from "../src/roads.ts";
 {
   const w = generateWorld(42);
   const roads = buildRoads(w);
-  assert.ok(roads.length >= w.settlements.length, `дорог ${roads.length}, городов ${w.settlements.length}`);
+  assert.ok(roads.length >= w.settlements.length - 1, `дорог ${roads.length}, городов ${w.settlements.length}`);
 
   for (const r of roads) {
     assert.ok(r.days >= 1, `дорога ${r.a}—${r.b} занимает ${r.days} дней`);
@@ -1021,7 +1021,7 @@ import { buildRoads, roadsOf } from "../src/roads.ts";
       assert.ok(dx <= 1 && dy <= 1, "шаг дороги — соседний тайл");
       assert.ok(!w.water[q], "дорога не идёт по открытой воде");
     }
-    assert.equal(r.tiles[0], w.settlements[r.a].y * w.w + w.settlements[r.a].x, "путь начинается в городе");
+    assert.equal(r.tiles[0], w.settlements[r.a].y * w.w + w.settlements[r.a].x, "путь начинается в городе a");
     assert.equal(r.tiles.at(-1), w.settlements[r.b].y * w.w + w.settlements[r.b].x, "и приходит в город");
   }
 
@@ -1031,7 +1031,51 @@ import { buildRoads, roadsOf } from "../src/roads.ts";
     for (const l of links) assert.ok(l.days >= 1 && l.other.name.length > 0, "у дороги есть срок и сосед");
   }
 
+  // roads heading the same way must share one corridor, not run side by side
+  const sets = roads.map((r) => new Set(r.tiles));
+  let beside = 0, compared = 0;
+  for (let i = 0; i < roads.length; i++) {
+    for (let j = 0; j < roads.length; j++) {
+      if (i === j) continue;
+      for (const t of roads[j].tiles) {
+        compared++;
+        if (sets[i].has(t)) continue;
+        const x = t % w.w, y = (t / w.w) | 0;
+        let touching = false;
+        for (let dy = -1; dy <= 1 && !touching; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (sets[i].has((y + dy) * w.w + (x + dx))) { touching = true; break; }
+          }
+        }
+        if (touching) beside++;
+      }
+    }
+  }
+  const besideShare = beside / compared;
+  assert.ok(besideShare <= 0.02, `дороги идут вплотную без слияния: ${(besideShare * 100).toFixed(1)}%`);
+
+  // the network is one piece: every town is reachable from town 0
+  const seen = new Set([0]);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const r of roads) {
+      if (seen.has(r.a) && !seen.has(r.b)) { seen.add(r.b); changed = true; }
+      if (seen.has(r.b) && !seen.has(r.a)) { seen.add(r.a); changed = true; }
+    }
+  }
+  assert.equal(seen.size, w.settlements.length, `сеть связана: ${seen.size} из ${w.settlements.length}`);
+
+  // hills, mountains and desert cost more, so long stretches through them must be rare
+  let hard = 0, sand = 0, totalTiles = 0;
+  for (const r of roads) for (const t of r.tiles) {
+    totalTiles++;
+    if (w.biome[t] === 5 || w.biome[t] === 6) hard++;
+    if (w.biome[t] === 1) sand++;
+  }
+  assert.ok(hard / totalTiles <= 0.02, `по холмам и горам идёт ${((hard / totalTiles) * 100).toFixed(1)}% дорог, ждём ≤2%`);
+  assert.ok(sand / totalTiles <= 0.15, `по песку идёт ${((sand / totalTiles) * 100).toFixed(1)}% дорог, ждём ≤15%`);
+
   const again = buildRoads(generateWorld(42));
   assert.deepEqual(again.map((r) => [r.a, r.b, r.days]), roads.map((r) => [r.a, r.b, r.days]), "дороги детерминированы");
-  console.log(`ok — дороги: ${roads.length} путей, шаги по тайлам, без воды, сроки, детерминизм`);
+  console.log(`ok — дороги: ${roads.length} путей, вплотную ${(besideShare * 100).toFixed(1)}%, по горам ${(hard / totalTiles * 100).toFixed(1)}%, сеть связана, сроки, детерминизм`);
 }

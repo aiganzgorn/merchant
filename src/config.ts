@@ -160,11 +160,11 @@ export const CITY_HOUSE_COLOR = "#101014";
 export const CITY_STREET_COLOR = "#6f5236";
 
 // roads between towns
-export const ROAD_NEIGHBOURS = 2;      // how many nearest towns each town is joined to
 export const ROAD_TILES_PER_DAY = 12;  // terrain-costed tiles a caravan covers per day
 export const ROAD_SEARCH_MARGIN = 40;  // tiles of search box around two towns
-export const ROAD_RIVER_COST = 3;      // fording a river
-export const ROAD_BIOME_COST = [Infinity, 1.2, 1, 1, 1.5, 2.5, 4]; // water, sand, steppe, field, forest, hill, mountain
+export const ROAD_RIVER_COST = 5;      // fording a river
+export const ROAD_BIOME_COST = [Infinity, 1.8, 1, 1, 1.5, 3.5, 8]; // water, sand, steppe, field, forest, hill, mountain
+export const ROAD_REUSE_COST = 0.45;  // a tile another road already crosses is this much cheaper: roads merge instead of running side by side
 export const ROAD_COLOR = "#8a6a44";
 export const ROAD_THIN_ZOOM = 12;      // px per tile above which a road is drawn wider
 

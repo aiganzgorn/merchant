@@ -3,8 +3,10 @@
 import type { Settlement, World } from "./world.ts";
 import type { Road } from "./world.ts";
 import {
-  ROAD_NEIGHBOURS, ROAD_BIOME_COST, ROAD_RIVER_COST, ROAD_TILES_PER_DAY, ROAD_SEARCH_MARGIN,
+  ROAD_BIOME_COST, ROAD_RIVER_COST, ROAD_TILES_PER_DAY, ROAD_SEARCH_MARGIN, ROAD_REUSE_COST,
 } from "./config.ts";
+
+const BIOME_FIELD = 3; // index of the field biome in ROAD_BIOME_COST
 
 export type { Road };
 
@@ -13,19 +15,22 @@ const DIRS = [
   [1, 1], [1, -1], [-1, 1], [-1, -1],
 ];
 
-// Dijkstra over tiles inside the box around both ends. Roads may ford a river
-// (costly) but never cross open water, so lakes and the sea are walked around.
-function findPath(world: World, ax: number, ay: number, bx: number, by: number): { tiles: number[]; cost: number } {
+// A* over tiles inside the box around both ends. Roads may ford a river (costly)
+// but never cross open water, so lakes and the sea are walked around.
+// `use` marks tiles an earlier road already crosses; those are cheaper to walk on,
+// so a new road joins an existing one and forks off where they part.
+function findPath(world: World, ax: number, ay: number, bx: number, by: number, use: Uint8Array): { tiles: number[]; cost: number } {
   const { w, h, biome, water, river } = world;
   const margin = ROAD_SEARCH_MARGIN;
   const x0 = Math.max(0, Math.min(ax, bx) - margin), x1 = Math.min(w - 1, Math.max(ax, bx) + margin);
   const y0 = Math.max(0, Math.min(ay, by) - margin), y1 = Math.min(h - 1, Math.max(ay, by) + margin);
   const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-  const cost = new Float32Array(bw * bh).fill(Infinity);
+  const cost = new Float32Array(bw * bh).fill(Infinity);   // what the search pays, discounts included
+  const real = new Float32Array(bw * bh).fill(Infinity);   // honest travel cost, no reuse discount
   const prev = new Int32Array(bw * bh).fill(-1);
   const done = new Uint8Array(bw * bh);
 
-  const tileCost = (i: number): number => {
+  const terrainAt = (i: number): number => {
     if (water[i]) return Infinity;
     const c = ROAD_BIOME_COST[biome[i]] ?? 2;
     return river[i] ? Math.max(c, ROAD_RIVER_COST) : c;
@@ -34,11 +39,20 @@ function findPath(world: World, ax: number, ay: number, bx: number, by: number):
   const start = (ay - y0) * bw + (ax - x0);
   const goal = (by - y0) * bw + (bx - x0);
   cost[start] = 0;
+  real[start] = 0;
+
+  // Admissible estimate of the cost still ahead: the cheapest possible tile per step.
+  const goalX = bx - x0, goalY = by - y0;
+  const cheapest = (ROAD_BIOME_COST[BIOME_FIELD] ?? 1) * ROAD_REUSE_COST;
+  const estimate = (cell: number): number => {
+    const dx = Math.abs((cell % bw) - goalX), dy = Math.abs(((cell / bw) | 0) - goalY);
+    return (Math.max(dx, dy) + 0.41 * Math.min(dx, dy)) * cheapest;
+  };
 
   // Small binary heap of (cost, cell); a plain array would be fine at this size
   // but a heap keeps a long road across the map from crawling.
   const heap: number[] = [start];
-  const heapCost: number[] = [0];
+  const heapCost: number[] = [estimate(start)];
   const push = (cell: number, c: number) => {
     let i = heap.length;
     heap.push(cell); heapCost.push(c);
@@ -80,54 +94,66 @@ function findPath(world: World, ax: number, ay: number, bx: number, by: number):
       const nx = cx + dx, ny = cy + dy;
       if (nx < x0 || ny < y0 || nx > x1 || ny > y1) continue;
       const ni = ny * w + nx;
-      const step = tileCost(ni);
-      if (step === Infinity) continue;
+      const stepTerrain = terrainAt(ni);
+      if (stepTerrain === Infinity) continue;
       const ncell = (ny - y0) * bw + (nx - x0);
       if (done[ncell]) continue;
       const diag = dx !== 0 && dy !== 0 ? 1.41 : 1;
-      const next = cost[cell] + step * diag;
+      const step = (use[ni] ? stepTerrain * ROAD_REUSE_COST : stepTerrain) * diag;
+      const next = cost[cell] + step;
       if (next < cost[ncell]) {
         cost[ncell] = next;
+        real[ncell] = real[cell] + stepTerrain * diag;
         prev[ncell] = cell;
-        push(ncell, next);
+        push(ncell, next + estimate(ncell));
       }
     }
   }
 
-  if (!Number.isFinite(cost[goal])) return { tiles: [], cost: 0 };
+  if (!Number.isFinite(real[goal])) return { tiles: [], cost: 0 };
   const tiles: number[] = [];
   for (let c = goal; c >= 0; c = prev[c]) tiles.push((y0 + ((c / bw) | 0)) * w + (x0 + (c % bw)));
   tiles.reverse();
-  return { tiles, cost: cost[goal] };
+  return { tiles, cost: real[goal] };
 }
 
+// The network grows one road at a time: every new town is joined from the closest
+// town that already has a road, and the search walks over the roads laid before
+// (they are cheaper), so new roads reuse a trunk and fork off at a junction.
 export function buildRoads(world: World): Road[] {
   const towns = world.settlements;
-  const pairs = new Map<string, Road>();
-  const near = towns.map((s, i) => {
-    const list: { j: number; d: number }[] = [];
-    for (let j = 0; j < towns.length; j++) {
-      if (i === j) continue;
-      list.push({ j, d: Math.hypot(towns[j].x - s.x, towns[j].y - s.y) });
-    }
-    return list.sort((p, q) => p.d - q.d).slice(0, ROAD_NEIGHBOURS);
-  });
+  const roads: Road[] = [];
+  if (towns.length < 2) return roads;
 
-  for (let a = 0; a < towns.length; a++) {
-    for (const { j: b } of near[a]) {
-      const lo = Math.min(a, b), hi = Math.max(a, b);
-      const key = `${lo}:${hi}`;
-      if (pairs.has(key)) continue;
-      const A = towns[lo], B = towns[hi];
-      const { tiles, cost } = findPath(world, A.x, A.y, B.x, B.y);
-      const road: Road = {
-        a: lo, b: hi, tiles,
-        days: tiles.length === 0 ? Math.ceil(Math.hypot(B.x - A.x, B.y - A.y) / ROAD_TILES_PER_DAY) : Math.max(1, Math.ceil(cost / ROAD_TILES_PER_DAY)),
-      };
-      pairs.set(key, road);
+  const use = new Uint8Array(world.w * world.h);
+  const joined = new Uint8Array(towns.length);
+  joined[0] = 1;
+
+  for (;;) {
+    let from = -1, to = -1, bestDist = Infinity;
+    for (let a = 0; a < towns.length; a++) {
+      if (!joined[a]) continue;
+      for (let b = 0; b < towns.length; b++) {
+        if (joined[b]) continue;
+        const d = Math.hypot(towns[a].x - towns[b].x, towns[a].y - towns[b].y);
+        if (d < bestDist) { bestDist = d; from = a; to = b; }
+      }
     }
+    if (to < 0) break;
+
+    const A = towns[from], B = towns[to];
+    const { tiles, cost } = findPath(world, A.x, A.y, B.x, B.y, use);
+    for (const t of tiles) use[t] = 1;
+    joined[to] = 1;
+    // tiles run from town a to town b, so drawing and travel agree on direction
+    roads.push({
+      a: from, b: to, tiles,
+      days: tiles.length === 0
+        ? Math.ceil(bestDist / ROAD_TILES_PER_DAY)
+        : Math.max(1, Math.ceil(cost / ROAD_TILES_PER_DAY)),
+    });
   }
-  return [...pairs.values()];
+  return roads;
 }
 
 // Roads touching a town, shortest journey first.
