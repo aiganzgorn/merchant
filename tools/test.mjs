@@ -376,18 +376,19 @@ test("точки: биом, запасы, скрытая руда, поселе�
     if (a === b || a.kind !== b.kind) continue;
     assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) >= POI_MIN_GAP, "две точки одного вида слишком близко");
   }
-  // settlements stand next to water or forest, on dry flat land
+  // settlements stand on dry flat land near a known POI
   assert.ok(w.settlements.length >= 12, `поселений ${w.settlements.length}`);
   const settlementTiles = new Set();
   for (const s of w.settlements) {
     assert.ok(!w.water[s.y * w.w + s.x], "поселение в воде");
     const sb = w.biome[s.y * w.w + s.x];
     assert.ok(sb !== BIOME.hill && sb !== BIOME.mountain, "поселение на холме или горе");
+    assert.ok(w.river[s.y * w.w + s.x] === 0, "поселение на реке");
     assert.ok(!settlementTiles.has(`${s.x},${s.y}`), "два поселения на одном тайле");
     settlementTiles.add(`${s.x},${s.y}`);
     assert.ok(!w.poi.some((p) => p.x === s.x && p.y === s.y), "поселение на точке интереса");
-    assert.ok(w.poi.some((p) => (p.kind === POI.fishing || p.kind === POI.logging)
-      && Math.max(Math.abs(p.x - s.x), Math.abs(p.y - s.y)) <= SETTLEMENT_REACH), "поселение без воды и леса рядом");
+    assert.ok(w.poi.some((p) => p.known
+      && Math.max(Math.abs(p.x - s.x), Math.abs(p.y - s.y)) <= SETTLEMENT_REACH), "поселение без точки рядом");
   }
   // no POI sits on the same tile as its nearest settlement
   for (const p of w.poi) {
@@ -457,11 +458,19 @@ for (const p of ws.poi) {
   }
 }
 
-// Mines are owned in data but stay hidden from the player.
+const knownCount = ws.poi.filter((p) => p.known).length;
+const ownedKnown = ws.poi.filter((p) =>
+  p.known && ws.settlements.some((s) => s.pois.includes(ws.poi.indexOf(p)))
+).length;
+assert.ok(ownedKnown / knownCount >= 0.8, `seed 42: owned ${ownedKnown}/${knownCount} known POIs`);
+
+// Mines respect the same ownership cap and stay hidden from the player.
 for (const p of ws.poi) {
   if (p.kind !== POI.mine) continue;
   const owner = ws.settlements.findIndex((s) => s.pois.includes(ws.poi.indexOf(p)));
-  assert.ok(owner >= 0, "рудник получает хозяина в данных");
+  if (nearestSettlementDist(ws, p) <= POI_OWN_RANGE) {
+    assert.ok(owner >= 0, "рудник в радиусе владения получает хозяина");
+  }
   assert.ok(!p.known, "рудник остаётся скрытым");
 }
 

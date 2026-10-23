@@ -137,7 +137,9 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
 
   const settlements: Settlement[] = [];
   const occupied = new Uint8Array(n);
-  let anchors = poi.filter(p => p.kind === POI.fishing || p.kind === POI.logging);
+  // Anchor towns near any known POI so the map is covered evenly for production.
+  let anchors = poi.filter(p => p.known);
+  const covered = new Uint8Array(poi.length);
   while (settlements.length < SETTLEMENT_COUNT && anchors.length > 0) {
     const ai = int(rng, anchors.length);
     const base = anchors[ai];
@@ -158,9 +160,26 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
       anchors.splice(ai, 1);
       continue;
     }
-    const choice = options[int(rng, options.length)];
+    // Prefer tiles that bring the most not-yet-covered POIs into ownership range.
+    let bestScore = -1;
+    const best: { x: number; y: number }[] = [];
+    for (const o of options) {
+      let score = 0;
+      for (let pi = 0; pi < poi.length; pi++) {
+        if (covered[pi]) continue;
+        const p = poi[pi];
+        if (Math.hypot(o.x - p.x, o.y - p.y) <= POI_OWN_RANGE) score++;
+      }
+      if (score > bestScore) { bestScore = score; best.length = 0; best.push(o); }
+      else if (score === bestScore) best.push(o);
+    }
+    const choice = best[int(rng, best.length)];
     occupied[choice.y * w + choice.x] = 1;
     settlements.push(choice as Settlement);
+    for (let pi = 0; pi < poi.length; pi++) {
+      const p = poi[pi];
+      if (Math.hypot(choice.x - p.x, choice.y - p.y) <= POI_OWN_RANGE) covered[pi] = 1;
+    }
   }
 
   return { poi, settlements };
@@ -556,8 +575,7 @@ export function generateWorld(seed: number): World {
     });
   }
 
-  // Known POIs are owned only by the nearest settlement within POI_OWN_RANGE.
-  // Hidden mines always get an owner in data so the simulation can track them.
+  // A POI is owned only by the nearest settlement within POI_OWN_RANGE.
   for (let pi = 0; pi < poi.length; pi++) {
     const p = poi[pi];
     let best = -1, bestDist = Infinity;
@@ -566,8 +584,7 @@ export function generateWorld(seed: number): World {
       const d = Math.hypot(s.x - p.x, s.y - p.y);
       if (d < bestDist) { bestDist = d; best = si; }
     }
-    if (best < 0) continue;
-    if (bestDist <= POI_OWN_RANGE || p.kind === POI.mine) settlements[best].pois.push(pi);
+    if (best >= 0 && bestDist <= POI_OWN_RANGE) settlements[best].pois.push(pi);
   }
 
   return { ...worldBase, regionOf, cultures, namer };
