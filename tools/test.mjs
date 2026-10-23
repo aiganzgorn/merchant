@@ -685,7 +685,7 @@ assert.equal(NEED_TIERS.length, 4);
 // день прихода без еды: население падает, но не обнуляется
 // (точки в этих сценариях отключаем: поселение с фермой голодом не убить)
 const hungry = generateWorld(7);
-for (const s of hungry.settlements) { s.stock.fill(0); s.water = true; s.pois = []; }
+for (const s of hungry.settlements) { s.stock.fill(0); s.water = true; s.pois = []; s.population = Math.max(s.population, 30); }
 const hungryBefore = hungry.settlements.map((s) => s.population);
 stepDay(hungry);
 const hungryAfter = hungry.settlements.map((s) => s.population);
@@ -740,4 +740,130 @@ assert.equal(sim.day, 1, "×4: день за 15 с");
 sim = { day: 0, speed: 0, acc: 0 };
 sim = advance(sim, 10_000);
 assert.equal(sim.day, 0, "пауза не идёт");
+// every town owns a food point
+const isFoodPoi = (p) => p.kind === POI.fishing || p.kind === POI.farm || p.kind === POI.pasture;
+for (const seed of [1, 8, 42, 1000]) {
+  const w = generateWorld(seed);
+  for (const s of w.settlements) {
+    assert.ok(s.pois.some((i) => isFoodPoi(w.poi[i])), `seed ${seed}: у ${s.name} нет продовольственной точки`);
+  }
+}
+
+// depleted quarry stops producing
+const depleted = generateWorld(12);
+const depletedOwner = depleted.settlements.find((s) => s.pois.some((i) => depleted.poi[i].kind === POI.quarry));
+assert.ok(depletedOwner, "у каменоломни есть хозяин");
+const depletedQuarryIdx = depletedOwner.pois.find((i) => depleted.poi[i].kind === POI.quarry);
+const depletedQuarry = depleted.poi[depletedQuarryIdx];
+depletedQuarry.reserve = 0;
+depletedOwner.pois = [depletedQuarryIdx]; // isolate the quarry
+for (const s of depleted.settlements) { if (s !== depletedOwner) s.pois = []; }
+depletedOwner.stock[RESOURCE.grain] = 10_000;
+depletedOwner.water = true;
+const stoneBefore = depletedOwner.stock[RESOURCE.stone];
+stepDay(depleted);
+assert.equal(depletedOwner.stock[RESOURCE.stone], stoneBefore, "истощённая каменоломня не производит камень");
+
+// food need is closed by the sum of any resources in the group
+const mixed = generateWorld(13);
+const mixedS = mixed.settlements[0];
+mixedS.stock.fill(0);
+mixedS.pois = [];
+mixedS.water = true;
+mixedS.population = 100;
+mixedS.stock[RESOURCE.fish] = 1.0;
+mixedS.stock[RESOURCE.grain] = 1.0;
+const mixedBefore = mixedS.population;
+stepDay(mixed);
+assert.ok(mixedS.population > mixedBefore, "еда закрывается суммой ресурсов группы");
+
+// boom: full satisfaction gets the boom factor bonus
+import { GROWTH_RATE, BOOM_FACTOR } from "../src/config.ts";
+const boom = generateWorld(14);
+const full = boom.settlements[0];
+const half = boom.settlements[1];
+const basePop = 100;
+full.population = basePop;
+half.population = basePop;
+full.pois = [];
+half.pois = [];
+full.stock.fill(10_000);
+half.stock.fill(0);
+half.stock[RESOURCE.grain] = 10_000; // food only, no water
+full.water = true;
+half.water = false;
+stepDay(boom);
+const fullRate = full.population / basePop - 1;
+const halfRate = half.population / basePop - 1;
+assert.ok(Math.abs(fullRate - GROWTH_RATE * BOOM_FACTOR) < 0.001, "полное удовлетворение даёт бум-рост");
+assert.ok(fullRate > halfRate * 1.5, "бонус за полное удовлетворение заметно выше");
+
+// luxury is counted only from level 4
+const tierGate = generateWorld(15);
+const t3noSalt = tierGate.settlements[0];
+const t3salt = tierGate.settlements[1];
+const t4 = tierGate.settlements[2];
+for (const s of [t3noSalt, t3salt, t4]) {
+  s.population = 2500;
+  s.stock.fill(0);
+  s.pois = [];
+  s.water = true;
+}
+t3noSalt.level = 3;
+t3salt.level = 3;
+t3salt.stock[RESOURCE.salt] = 10_000;
+t4.level = 4;
+t4.stock[RESOURCE.salt] = 10_000;
+const t3noSaltBefore = t3noSalt.population;
+const t3saltBefore = t3salt.population;
+const t4Before = t4.population;
+stepDay(tierGate);
+assert.ok(Math.abs(t3noSalt.population - t3salt.population) < 0.001, "уровень 3 не считает роскошь");
+assert.ok(t4.population - t4Before > t3salt.population - t3saltBefore, "уровень 4 считает роскошь");
+
+// abandoned towns produce nothing and stay at 0 population
+const abandoned = generateWorld(16);
+const ab = abandoned.settlements[0];
+ab.abandoned = true;
+ab.population = 0;
+ab.stock.fill(0);
+ab.buildings = { houses: 0, admin: 0, industry: 0, trade: 0 };
+const abQuarryIdx = abandoned.poi.findIndex((p) => p.kind === POI.quarry);
+assert.ok(abQuarryIdx >= 0, "есть каменоломня для проверки");
+for (const s of abandoned.settlements) s.pois = s.pois.filter((i) => i !== abQuarryIdx);
+ab.pois = [abQuarryIdx];
+const abPoi = abandoned.poi[abQuarryIdx];
+const abReserveBefore = abPoi.reserve;
+stepDay(abandoned);
+assert.equal(ab.population, 0, "покинутое поселение остаётся без населения");
+assert.equal(abPoi.reserve, abReserveBefore, "покинутое поселение не трогает запасы");
+
+// at most one event per settlement per day, Russian, no day prefix
+const evWorld = generateWorld(17);
+const evEvents = stepDay(evWorld);
+assert.ok(evEvents.length <= evWorld.settlements.length, "не больше одного события на поселение");
+for (const e of evEvents) {
+  assert.ok(typeof e === "string" && e.length > 0, "событие — непустая строка");
+  assert.ok(!/^\d/.test(e), "событие не начинается с цифры (нет префикса дня)");
+  assert.ok(/[А-ЯЁа-яё]/.test(e), "событие на русском");
+}
+
+// renewable POIs regenerate and never exceed reserveMax
+const renew = generateWorld(18);
+let renewOwner = null;
+let forestPoi = null;
+for (let i = 0; i < renew.poi.length; i++) {
+  if (renew.poi[i].kind !== POI.logging) continue;
+  const owner = renew.settlements.find((s) => s.pois.includes(i));
+  if (owner) { forestPoi = renew.poi[i]; renewOwner = owner; break; }
+}
+assert.ok(forestPoi, "есть принадлежащая лесозаготовка");
+renewOwner.water = true;
+renewOwner.stock[RESOURCE.grain] = 10_000;
+const forestMax = forestPoi.reserveMax;
+forestPoi.reserve = 0;
+stepDay(renew);
+assert.ok(forestPoi.reserve > 0, "лес восстанавливается");
+assert.ok(forestPoi.reserve <= forestMax, "запас леса не превышает reserveMax");
+
 console.log("ok — сутки: уровни, голод, рост, истощение, часы");

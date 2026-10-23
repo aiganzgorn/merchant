@@ -575,11 +575,132 @@ export function generateWorld(seed: number): World {
   // range. If nothing is near enough, the town stays empty (sparse map).
   const ownerOf = new Int32Array(poi.length).fill(-1);
   const pointCount = new Int32Array(settlements.length);
+  const foodCount = new Int32Array(settlements.length);
+  const isFoodPoi = (p: typeof poi[0]) => p.kind === POI.fishing || p.kind === POI.farm || p.kind === POI.pasture;
   for (let si = 0; si < settlements.length; si++) {
-    for (const pi of settlements[si].pois) { ownerOf[pi] = si; pointCount[si]++; }
+    for (const pi of settlements[si].pois) {
+      ownerOf[pi] = si;
+      pointCount[si]++;
+      if (isFoodPoi(poi[pi])) foodCount[si]++;
+    }
   }
 
   const RANGE2 = POI_OWN_RANGE * 2;
+
+  function givePoi(pi: number, newOwner: number) {
+    const cur = ownerOf[pi];
+    if (cur >= 0) {
+      pointCount[cur]--;
+      if (isFoodPoi(poi[pi])) foodCount[cur]--;
+    }
+    ownerOf[pi] = newOwner;
+    pointCount[newOwner]++;
+    if (isFoodPoi(poi[pi])) foodCount[newOwner]++;
+  }
+
+  // 1. Every town must have a food point. First try the nearest food point
+  // from a donor with 2+ food points or an unowned food point within twice
+  // the ownership range.
+  function findFoodInRange(si: number): number {
+    const s = settlements[si];
+    let bestPi = -1, bestDist = Infinity;
+    for (let pi = 0; pi < poi.length; pi++) {
+      if (!isFoodPoi(poi[pi])) continue;
+      const cur = ownerOf[pi];
+      if (cur === si) continue;
+      if (cur >= 0 && foodCount[cur] < 2) continue;
+      const p = poi[pi];
+      const d = Math.hypot(s.x - p.x, s.y - p.y);
+      if (d > RANGE2 || d >= bestDist) continue;
+      bestDist = d; bestPi = pi;
+    }
+    return bestPi;
+  }
+
+  for (let iter = 0; iter < settlements.length; iter++) {
+    let progress = false;
+    for (let si = 0; si < settlements.length; si++) {
+      if (foodCount[si] > 0) continue;
+      const pi = findFoodInRange(si);
+      if (pi >= 0) { givePoi(pi, si); progress = true; }
+    }
+    if (!progress) break;
+  }
+
+  // 2. Global fallback for towns still without food: take the nearest food
+  // point from a donor with 2+ food points or an unowned food point anywhere
+  // on the map. Repeat until stable.
+  function findFoodGlobal(si: number): number {
+    const s = settlements[si];
+    let bestPi = -1, bestDist = Infinity;
+    for (let pi = 0; pi < poi.length; pi++) {
+      if (!isFoodPoi(poi[pi])) continue;
+      const cur = ownerOf[pi];
+      if (cur === si) continue;
+      if (cur >= 0 && foodCount[cur] < 2) continue;
+      const p = poi[pi];
+      const d = Math.hypot(s.x - p.x, s.y - p.y);
+      if (d >= bestDist) continue;
+      bestDist = d; bestPi = pi;
+    }
+    return bestPi;
+  }
+
+  for (let iter = 0; iter < settlements.length; iter++) {
+    let progress = false;
+    for (let si = 0; si < settlements.length; si++) {
+      if (foodCount[si] > 0) continue;
+      const pi = findFoodGlobal(si);
+      if (pi >= 0) { givePoi(pi, si); progress = true; }
+    }
+    if (!progress) break;
+  }
+
+  // 3. Last resort: if any town is still starving, reassign all food POIs
+  // with a greedy nearest-food matching. This should only happen on extremely
+  // sparse maps, but it guarantees no town is left without food.
+  let starving: number[] = [];
+  for (let si = 0; si < settlements.length; si++) if (foodCount[si] === 0) starving.push(si);
+  if (starving.length > 0) {
+    // unassign all food POIs
+    for (let pi = 0; pi < poi.length; pi++) {
+      if (!isFoodPoi(poi[pi])) continue;
+      const cur = ownerOf[pi];
+      if (cur >= 0) {
+        pointCount[cur]--;
+        foodCount[cur]--;
+        ownerOf[pi] = -1;
+      }
+    }
+    // process most isolated towns first
+    const order = starving.map((si) => {
+      const s = settlements[si];
+      let bestD = Infinity;
+      for (let pi = 0; pi < poi.length; pi++) {
+        if (!isFoodPoi(poi[pi])) continue;
+        const d = Math.hypot(s.x - poi[pi].x, s.y - poi[pi].y);
+        if (d < bestD) bestD = d;
+      }
+      return { si, d: bestD };
+    });
+    order.sort((a, b) => b.d - a.d);
+    for (const { si } of order) {
+      const s = settlements[si];
+      let bestPi = -1, bestDist = Infinity;
+      for (let pi = 0; pi < poi.length; pi++) {
+        if (!isFoodPoi(poi[pi]) || ownerOf[pi] >= 0) continue;
+        const d = Math.hypot(s.x - poi[pi].x, s.y - poi[pi].y);
+        if (d < bestDist) { bestDist = d; bestPi = pi; }
+      }
+      if (bestPi >= 0) {
+        ownerOf[bestPi] = si;
+        pointCount[si]++;
+        foodCount[si]++;
+      }
+    }
+  }
+
+  // 4. Every town must own at least one point.
   for (let si = 0; si < settlements.length; si++) {
     if (pointCount[si] > 0) continue;
     const s = settlements[si];
@@ -606,12 +727,7 @@ export function generateWorld(seed: number): World {
       }
     }
 
-    if (bestPi >= 0) {
-      const cur = ownerOf[bestPi];
-      if (cur >= 0) pointCount[cur]--;
-      ownerOf[bestPi] = si;
-      pointCount[si]++;
-    }
+    if (bestPi >= 0) givePoi(bestPi, si);
   }
 
   // Rebuild per-settlement index lists from the single ownership map.

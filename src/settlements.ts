@@ -35,6 +35,22 @@ export function availableTiers(level: number): number {
   return count;
 }
 
+function groupStock(stock: Float32Array, resources: number[]): number {
+  return resources.reduce((sum, r) => sum + stock[r], 0);
+}
+
+function consumeFromGroup(stock: Float32Array, resources: number[], need: number): boolean {
+  if (groupStock(stock, resources) < need) return false;
+  let remaining = need;
+  for (const r of resources.slice().sort((a, b) => a - b)) {
+    const take = Math.min(stock[r], remaining);
+    stock[r] -= take;
+    remaining -= take;
+    if (remaining <= 0) break;
+  }
+  return true;
+}
+
 export function settlementCard(s: Settlement) {
   const levelName = LEVEL_NAMES[s.level];
   const open = availableTiers(s.level);
@@ -45,7 +61,7 @@ export function settlementCard(s: Settlement) {
       if (need.water) {
         needs.push({ label: need.label, ok: s.water, have: s.water ? 1 : 0, need: 1 });
       } else {
-        const have = need.resources.reduce((sum, r) => sum + s.stock[r], 0);
+        const have = groupStock(s.stock, need.resources);
         needs.push({ label: need.label, ok: have >= n, have, need: n });
       }
     }
@@ -65,9 +81,9 @@ export function stepDay(world: World): string[] {
     // 1. production
     for (const pi of s.pois) {
       const p = world.poi[pi];
-      const amount = PRODUCE_PER_DAY * p.yield;
+      const amount = Math.min(PRODUCE_PER_DAY * p.yield, p.reserve);
       s.stock[p.resource] += amount;
-      p.reserve = Math.max(0, p.reserve - amount);
+      p.reserve -= amount;
       if (renewable.has(p.kind)) {
         // shortcut: regen never raises reserves above the starting cap
         p.reserve = Math.min(p.reserveMax, p.reserve + p.reserveMax * REGEN_RATE);
@@ -91,15 +107,7 @@ export function stepDay(world: World): string[] {
             tier0Unclosed.push(need.label);
           }
         } else {
-          let met = false;
-          for (const r of need.resources) {
-            if (s.stock[r] >= needAmount) {
-              s.stock[r] -= needAmount;
-              met = true;
-              break;
-            }
-          }
-          if (met) {
+          if (consumeFromGroup(s.stock, need.resources, needAmount)) {
             closed++;
           } else if (t === 0) {
             tier0Unclosed.push(need.label);
@@ -128,6 +136,8 @@ export function stepDay(world: World): string[] {
     if (s.population < ABANDON_POP) {
       s.abandoned = true;
       s.population = 0;
+      s.level = 0;
+      s.buildings = { houses: 0, admin: 0, industry: 0, trade: 0 };
       events.push(`${s.name} покинут`);
       continue;
     }

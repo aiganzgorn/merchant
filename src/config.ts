@@ -75,10 +75,10 @@ export const NAME_TRIES = 50;         // random attempts before switching to the
 export const POI_COUNTS: Record<number, number> = {
   0: 6, // logging
   1: 6, // hunting
-  2: 6, // fishing
+  2: 10, // fishing
   3: 4, // salt
-  4: 6, // farm
-  5: 6, // pasture
+  4: 10, // farm
+  5: 10, // pasture
   6: 6, // quarry
   7: 6, // mine
 };
@@ -104,7 +104,6 @@ export const DECLINE_RATE = 0.015;
 export const PRODUCE_PER_DAY = 8;
 export const REGEN_RATE = 0.01;
 export const ABANDON_POP = 20;
-export const FEED_MAX = 60;
 
 export const NEED_TIERS: { label: string; resources: number[]; perCapita: number; water?: boolean }[][] = [
   [ { label: "еда", resources: [RESOURCE.fish, RESOURCE.grain, RESOURCE.livestock], perCapita: 0.02 },
