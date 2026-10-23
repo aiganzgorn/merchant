@@ -10,8 +10,11 @@ export type World = {
   water: Uint8Array;       // 1 = ocean or lake
   river: Uint8Array;       // 1 = river bed
   flow: Int32Array;        // index of the next tile downstream, -1 = ends here
+  streamSize: Int32Array;  // catchment behind each river tile — makes big rivers wide
   rivers: number;          // how many rivers were laid
+  riverLength: number;     // summed length of the rivers in tiles, jumps across flats included
   lakes: number;           // standing-water tiles beyond the ocean
+  waterLevel: number;      // elevation below which a tile is sea
 };
 
 export const BIOME = {

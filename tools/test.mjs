@@ -32,7 +32,43 @@ assert.notDeepEqual(generateWorld(43).biome, seedA.biome, "другой seed —
 assert.equal(seedA.biome.length, MAP_W * MAP_H, "карта 512×512");
 
 const share = (v) => Array.from(seedA.biome).filter(x => x === v).length / seedA.biome.length;
-assert.ok(share(BIOME.water) > 0.05 && share(BIOME.water) < 0.6, `воды ${(share(BIOME.water) * 100).toFixed(0)}%`);
+assert.ok(share(BIOME.water) > 0.15 && share(BIOME.water) < 0.38, `воды ${(share(BIOME.water) * 100).toFixed(0)}% — должно быть меньше трети`);
+
+
+// mountains must form chains, not blobs: a long thin component, not a round patch
+function largestComponent(biome, w, h, type) {
+  const seen = new Uint8Array(w * h);
+  let best = { size: 0, w: 0, h: 0 };
+  for (let i = 0; i < w * h; i++) {
+    if (seen[i] || biome[i] !== type) continue;
+    const queue = [i];
+    seen[i] = 1;
+    let size = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+    while (queue.length) {
+      const j = queue.pop();
+      size++;
+      const x = j % w, y = (j / w) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (!seen[k] && biome[k] === type) { seen[k] = 1; queue.push(k); }
+      }
+    }
+    if (size > best.size) best = { size, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+  return best;
+}
+
+const mountains = largestComponent(seedA.biome, MAP_W, MAP_H, BIOME.mountain);
+assert.ok(share(BIOME.mountain) > 0.015, `гор ${(share(BIOME.mountain) * 100).toFixed(1)}% — гор должно быть видно`);
+assert.ok(mountains.size > 300, `крупнейшая горная гряда ${mountains.size} тайлов`);
+const span = Math.max(mountains.w, mountains.h);
+const fill = mountains.size / (mountains.w * mountains.h);
+assert.ok(span > 100, `гряда должна тянуться: ${mountains.w}×${mountains.h}`);
+assert.ok(fill < 0.5, `гряда должна быть вытянутой, а не пятном: заполнение ${fill.toFixed(2)}`);
 for (let i = 0; i < seedA.elev.length; i++) {
   const v = seedA.elev[i];
   assert.ok(Number.isFinite(v) && v >= 0 && v <= 1, `высота ${v} в 0..1`);
@@ -86,6 +122,19 @@ for (let i = 0; i < rw.river.length; i++) {
 assert.ok(riverTiles > 100, `речных клеток ${riverTiles}`);
 assert.ok(riverTiles > 1000, `реки должны быть длинными: ${riverTiles} клеток на карту`);
 
+// rivers must not flood a region: no 32×32 window may be more than a quarter river
+{
+  let densest = 0;
+  for (let cy = 0; cy + 32 <= MAP_H; cy += 32) {
+    for (let cx = 0; cx + 32 <= MAP_W; cx += 32) {
+      let c = 0;
+      for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (rw.river[(cy + y) * MAP_W + cx + x]) c++;
+      if (c > densest) densest = c;
+    }
+  }
+  assert.ok(densest < 256, `плотность рек ${densest}/1024 — река не должна заливать район`);
+}
+
 // lakes exist somewhere in the first five seeds — most rivers simply reach the sea
 let lakes = 0;
 for (let s = 1; s <= 5; s++) {
@@ -106,7 +155,7 @@ for (let i = 0; i < rw.river.length; i++) {
 for (let start = 0; start < rw.river.length; start++) {
   if (!rw.river[start]) continue;
   let cur = start, steps = 0;
-  while (rw.flow[cur] >= 0 && steps++ < 500) cur = rw.flow[cur];
+  while (rw.flow[cur] >= 0 && steps++ < 5000) cur = rw.flow[cur];
   assert.ok(rw.water[cur] === 1 || rw.flow[cur] === -1, `река от ${start} куда-то приходит`);
   assert.equal(rw.water[cur], 1, `река от ${start} приходит в воду`);
 }
@@ -210,7 +259,7 @@ for (let s = 1; s <= 10; s++) {
   for (let i = 0; i < w.river.length; i++) {
     if (!w.river[i]) continue;
     let cur = i, steps = 0;
-    while (!w.water[cur] && w.flow[cur] >= 0 && steps++ < 2000) cur = w.flow[cur];
+    while (!w.water[cur] && w.flow[cur] >= 0 && steps++ < 5000) cur = w.flow[cur];
     assert.ok(w.water[cur] === 1, `seed ${s}: река от ${i} приходит в воду`);
   }
 }

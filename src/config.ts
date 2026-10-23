@@ -12,19 +12,29 @@ export const MAP_MIN_H = 120;    // the map never shrinks below this, px
 export const ELEV_SCALE = 96;       // tiles across the first noise octave
 export const MOIST_SCALE = 64;
 export const OCTAVES = 5;
-export const EDGE_FALLOFF = 0.18;   // share of the map that sinks to ocean
-export const WATER_LEVEL = 0.42;    // elevation below this is water
+export const EDGE_FALLOFF = 0.1;    // share of the map that sinks to ocean
+export const LAND_SHARE = 0.78;     // how much of the map is dry land — ocean hugs the rim
 export const SAND_LEVEL = 0.03;     // band above water that is beach
-export const HILL_LEVEL = 0.68;
-export const MOUNTAIN_LEVEL = 0.78;
+export const HILL_LEVEL = 0.42;     // foothills start here
+export const MOUNTAIN_LEVEL = 0.66; // rocky crest
 export const FIELD_MOIST = 0.62;
 export const FOREST_MOIST = 0.48;
 
+// tectonic seams — mountains run along them
+export const PLATE_GRID = 4;        // 4×4 plate seeds
+export const PLATE_JITTER = 0.7;    // how far a plate seed wanders from its grid cell
+export const PLATE_WARP = 140;      // tiles a seam is bent by noise
+export const PLATE_SEAM = 9;        // half-width of the uplift band, tiles
+export const PLATE_PEAKS = 18;      // scale of the noise that breaks a ridge into peaks
+export const PLATE_SCALE = 140;     // scale of the seam-warping noise
+export const RIDGE_HEIGHT = 0.72;    // how much of the elevation comes from uplift
+
 // rivers
 export const RIVER_COUNT = 24;        // how many rivers to try
-export const RIVER_SOURCE_MIN = 0.6;  // a river starts no lower than this elevation
+export const RIVER_MIN_CATCHMENT = 60; // land tiles a river must drain to be drawn
 export const RIVER_MAX_LEN = 400;     // tiles before we give up on one river
-export const LAKE_DEPTH = 0.04;      // how deep a filled pit has to be to hold water
+export const LAKE_SHARE = 0.02;      // share of the land that pools into the deepest basins
+export const LAKE_MIN_AREA = 16;     // smaller pools are wetlands, not lakes
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
 // camera

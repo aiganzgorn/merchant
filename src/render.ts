@@ -58,7 +58,7 @@ export function prerender(world: World): HTMLCanvasElement[] {
 }
 
 // Rivers are stroked in screen space, so they stay hair-thin when zoomed out and
-// become ribbons up close instead of a staircase of squares.
+// become ribbons up close instead of a staircase of squares. Width follows catchment.
 function drawRivers(ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number): void {
   const halfW = vw / 2 / cam.zoom, halfH = vh / 2 / cam.zoom;
   const x0 = Math.max(0, Math.floor(cam.x - halfW) - 1);
@@ -67,24 +67,30 @@ function drawRivers(ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw
   const y1 = Math.min(world.h - 1, Math.ceil(cam.y + halfH) + 1);
   if (x1 < x0 || y1 < y0) return;
 
-  ctx.strokeStyle = RIVER_COLOR;
-  ctx.lineWidth = Math.min(10, Math.max(1.2, cam.zoom * 0.45));
-  ctx.lineCap = "round";
-  ctx.beginPath();
+  const STEPS = 4;                       // four widths, so the whole net is a few strokes
+  const paths: Path2D[] = [];
+  for (let i = 0; i < STEPS; i++) paths.push(new Path2D());
+
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const i = y * world.w + x;
       if (!world.river[i]) continue;
-      const a = worldToScreen(cam, vw, vh, x + 0.5, y + 0.5);
       const next = world.flow[i];
-      const b = next >= 0
-        ? worldToScreen(cam, vw, vh, (next % world.w) + 0.5, Math.floor(next / world.w) + 0.5)
-        : a;
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
+      if (next < 0) continue;
+      const a = worldToScreen(cam, vw, vh, x + 0.5, y + 0.5);
+      const b = worldToScreen(cam, vw, vh, (next % world.w) + 0.5, Math.floor(next / world.w) + 0.5);
+      const cls = Math.min(STEPS - 1, Math.floor(Math.log2(1 + world.streamSize[i] / 40)));
+      paths[cls].moveTo(a.x, a.y);
+      paths[cls].lineTo(b.x, b.y);
     }
   }
-  ctx.stroke();
+
+  ctx.strokeStyle = RIVER_COLOR;
+  ctx.lineCap = "round";
+  for (let cls = 0; cls < STEPS; cls++) {
+    ctx.lineWidth = Math.min(16, Math.max(1.2, cam.zoom * (0.28 + 0.09 * cls)));
+    ctx.stroke(paths[cls]);
+  }
 }
 
 export function draw(
