@@ -424,6 +424,42 @@ for (const seed of [1, 8, 42, 1000]) {
 
 console.log("ok — точки интереса и поселения: биомы, запасы, скрытая руда, близость воды/леса");
 
+// --- regions and names --------------------------------------------------------
+const w1 = generateWorld(42);
+assert.ok(w1.cultures.length >= 3 && w1.cultures.length <= 7, `краёв ${w1.cultures.length}, ждём 3..7`);
+let unowned = 0;
+for (let i = 0; i < w1.biome.length; i++) {
+  const b = w1.biome[i];
+  const land = b !== 0 && b !== 5 && b !== 6 && w1.river[i] === 0;
+  if (land && w1.regionOf[i] < 0) unowned++;
+}
+assert.equal(unowned, 0, "у каждой пахотной клетки есть край");
+
+const namer = w1.namer;
+const names = new Set();
+for (let i = 0; i < 500; i++) {
+  const r = i % w1.cultures.length;
+  const n = namer.settlement(r);
+  assert.ok(n.length >= 4 && n.length <= 14, `длина имени ${n}`);
+  assert.ok(/^[А-ЯЁа-яё-]+$/.test(n), `только кириллица: ${n}`);
+  names.add(n);
+}
+assert.equal(names.size, 500, "500 имён без повторов");
+
+for (const c of w1.cultures) {
+  let hit = 0, total = 0;
+  for (let i = 0; i < 40; i++) {
+    const n = namer.settlement(c.id);
+    total++;
+    if (c.endings.some((e) => n.endsWith(e))) hit++;
+  }
+  assert.ok(hit / total >= 0.8, `окончания края ${c.name}: ${hit}/${total}`);
+}
+
+const w1b = generateWorld(42);
+assert.deepEqual(w1.settlements.map((s) => s.name), w1b.settlements.map((s) => s.name), "имена детерминированы");
+console.log("ok — края и имена: покрытие, 500 имён, окончания, детерминизм");
+
 // --- POI rendering ------------------------------------------------------------
 import { visiblePois, poiAt } from "../src/render.ts";
 

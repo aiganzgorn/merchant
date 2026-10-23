@@ -47,6 +47,31 @@ export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 // points of interest and settlements
 import { BIOME, POI, RESOURCE } from "./world.ts";
 
+export type CultureRegionTemplate = {
+  name: string;         // «шипящий», «твёрдый» — для отладки
+  onset: string[]; vowel: string[]; coda: string[];
+  endings: string[];    // по одному из них кончается ≥80% имён края
+  roots: string[];
+  genitive: string;     // чем имя кончается в родительном падеже
+};
+
+export const CULTURES: CultureRegionTemplate[] = [
+  { name: "шипящий", onset: ["ш", "щ", "ж", "ч", "с"], vowel: ["а", "и", "е"], coda: ["ш", "щ", "ч"], endings: ["ша", "щи", "жи"], roots: ["Шар", "Чиж", "Шуш"], genitive: "а" },
+  { name: "твёрдый", onset: ["р", "г", "к", "т", "д"], vowel: ["о", "а", "у"], coda: ["р", "г", "к"], endings: ["гар", "рок", "дор"], roots: ["Гар", "Дор", "Кур"], genitive: "а" },
+  { name: "плавный", onset: ["л", "м", "н", "в"], vowel: ["и", "е", "а"], coda: ["л", "н", "м"], endings: ["эль", "иль", "ан"], roots: ["Лан", "Мил", "Вел"], genitive: "я" },
+  { name: "свистящий", onset: ["с", "з", "ц", "ч"], vowel: ["а", "ы", "у"], coda: ["с", "з", "ц"], endings: ["са", "зы", "ца"], roots: ["Сав", "Зыр", "Цал"], genitive: "ы" },
+  { name: "гортанный", onset: ["х", "г", "к", "б"], vowel: ["а", "о", "э"], coda: ["х", "г", "б"], endings: ["ха", "го", "ба"], roots: ["Хаг", "Бор", "Гор"], genitive: "а" },
+  { name: "мягкий", onset: ["л", "нь", "рь", "й"], vowel: ["я", "е", "и"], coda: ["ль", "нь", "рь"], endings: ["ль", "нь", "я"], roots: ["Ли", "Нье", "Рья"], genitive: "и" },
+  { name: "северный", onset: ["т", "в", "с", "к"], vowel: ["о", "э", "и"], coda: ["ст", "рн", "льд"], endings: ["стад", "борг", "вик"], roots: ["Тор", "Вик", "Стар"], genitive: "а" },
+  { name: "южный", onset: ["м", "н", "ар", "са"], vowel: ["а", "и", "о"], coda: ["р", "н", "м"], endings: ["мар", "нат", "ри"], roots: ["Ам", "Сан", "Нат"], genitive: "и" },
+];
+
+export const MAX_REGIONS = 7;        // больше краёв не нужно — сведём мелочь в соседей
+export const MIN_REGION_SHARE = 0.02; // край меньше 2% суши приклеивается к соседу
+export const NAME_MIN = 4;            // минимальная длина имени
+export const NAME_MAX = 14;           // максимальная длина имени
+export const NAME_TRIES = 50;         // попыток до систематического обхода
+
 export const POI_COUNTS: Record<number, number> = {
   0: 6, // logging
   1: 6, // hunting

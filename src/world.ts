@@ -18,6 +18,27 @@ export type World = {
   waterLevel: number;      // elevation below which a tile is sea
   poi: Poi[];              // points of interest: resources and hidden ore
   settlements: Settlement[]; // first towns placed near water or forest
+  regionOf: Int16Array;    // region id per tile, -1 for walls and water
+  cultures: CultureRegion[]; // regions with their naming character
+  namer: Namer;            // deterministic settlement / enterprise / state namer
+};
+
+export type CultureRegion = {
+  id: number;
+  name: string;
+  tiles: number;
+  endings: string[];
+  onset: string[];
+  vowel: string[];
+  coda: string[];
+  roots: string[];
+  genitive: string;
+};
+
+export type Namer = {
+  settlement(region: number): string;
+  enterprise(kind: string, settlement: string, region: number): string;
+  state(region: number): string;
 };
 
 export const BIOME = {
@@ -67,6 +88,6 @@ export type Poi = {
   known: boolean;
 };
 
-export type Settlement = { x: number; y: number };
+export type Settlement = { x: number; y: number; name?: string };
 
 export const idx = (w: World, x: number, y: number): number => y * w.w + x;

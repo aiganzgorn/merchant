@@ -1,6 +1,7 @@
 // Procedural world from a seed: elevation, mountain seams, moisture, biomes, rivers.
 import { mulberry32, int, type Rng } from "./rng.ts";
 import { BIOME, POI, RESOURCE, type World, type Poi, type Settlement } from "./world.ts";
+import { buildRegions, createNamer, nearestRegion } from "./names.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST, LAND_SHARE,
@@ -501,7 +502,16 @@ export function generateWorld(seed: number): World {
 
   const { poi, settlements } = placePoi(rng, seed, biome, water, w, h);
 
-  return { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains, poi, settlements };
+  const worldBase = { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains, poi, settlements };
+  const { regionOf, cultures } = buildRegions(worldBase as World);
+  const namer = createNamer(seed, cultures);
+
+  for (const s of settlements) {
+    const region = nearestRegion({ ...worldBase, regionOf, cultures, namer } as World, s.x, s.y);
+    s.name = namer.settlement(region);
+  }
+
+  return { ...worldBase, regionOf, cultures, namer };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.
