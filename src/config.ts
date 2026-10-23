@@ -105,6 +105,13 @@ export const PRODUCE_PER_DAY = 8;
 export const REGEN_RATE = 0.01;
 export const ABANDON_POP = 20;
 
+// world time
+export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world
+export const ZOOM_PICK = 6;           // zoom when the player picks a town from the start list
+
+// strip
+export const FEED_MAX = 40;           // most event rows kept in the feed
+
 export const NEED_TIERS: { label: string; resources: number[]; perCapita: number; water?: boolean }[][] = [
   [ { label: "еда", resources: [RESOURCE.fish, RESOURCE.grain, RESOURCE.livestock], perCapita: 0.02 },
     { label: "вода", resources: [], perCapita: 0, water: true } ],

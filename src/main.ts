@@ -1,9 +1,12 @@
 // Browser entry point: canvas, camera, wheel zoom, drag pan, the bottom strip.
-import { STRIP_H, MAP_W, MAP_H, ZOOM_START } from "./config.ts";
+import { STRIP_H, MAP_W, MAP_H, ZOOM_START, MAX_FRAME_SECONDS, ZOOM_PICK } from "./config.ts";
 import { generateWorld, seedFromQuery } from "./gen.ts";
 import { prerender, draw, poiAt } from "./render.ts";
 import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Camera } from "./camera.ts";
 import { poiCard, isClick, declPoints, declTiles } from "./poi-card.ts";
+import { advance, type Sim, type Speed } from "./sim.ts";
+import { stepDay } from "./settlements.ts";
+import { clockText, pushEvent, startListHtml } from "./ui.ts";
 import type { Poi } from "./world.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
@@ -144,3 +147,58 @@ function showCard(poi: Poi | null): void {
 
 addEventListener("resize", resize);
 resize();
+
+// --- world time --------------------------------------------------------------
+const sim: Sim = { day: 1, speed: 1, acc: 0 };
+const clockEl = $("clock");
+const speedBtns = [...document.querySelectorAll<HTMLButtonElement>(".speed-btn")];
+
+function showClock(): void {
+  clockEl.textContent = clockText(sim);
+}
+
+function setSpeed(speed: Speed): void {
+  sim.speed = speed;
+  for (const btn of speedBtns) btn.setAttribute("aria-pressed", String(Number(btn.dataset.speed) === speed));
+  showClock();
+}
+
+for (const btn of speedBtns) btn.addEventListener("click", () => setSpeed(Number(btn.dataset.speed) as Speed));
+
+// --- start overlay -----------------------------------------------------------
+const startEl = $("start");
+$("start-list").innerHTML = startListHtml(world);
+$("start-list").addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".start-item");
+  if (!btn) return;
+  cam = clampCamera({ x: Number(btn.dataset.x), y: Number(btn.dataset.y), zoom: ZOOM_PICK }, view.w, view.h);
+  $("zoom").textContent = `zoom ${cam.zoom.toFixed(1)}`;
+  startEl.hidden = true;
+  draw(ctx, world, chunks, cam, view.w, view.h, zones);
+});
+
+// The strip's static placeholders exist so the page is not empty before the first day.
+for (const el of $("feed").querySelectorAll(".row, .note")) el.remove();
+pushEvent(`мир собран · поселений: ${world.settlements.length}`);
+showClock();
+
+let lastFrame = performance.now();
+function tick(now: number): void {
+  // the cap keeps a background tab from returning with a month of skipping days
+  const dt = Math.min((now - lastFrame) / 1000, MAX_FRAME_SECONDS);
+  lastFrame = now;
+  const next = advance(sim, dt);
+  const days = next.day - sim.day;
+  const firstDay = sim.day + 1;
+  sim.day = next.day;
+  sim.acc = next.acc;
+  if (days > 0) {
+    for (let d = 0; d < days; d++) {
+      for (const text of stepDay(world)) pushEvent(`день ${firstDay + d} · ${text}`);
+    }
+    showClock();
+    draw(ctx, world, chunks, cam, view.w, view.h, zones);
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);

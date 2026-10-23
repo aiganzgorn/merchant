@@ -41,11 +41,43 @@
       .row { color: #8f9ac4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .row b { color: #cdd6ff; font-weight: 600; }
       .note { color: #59618a; margin-top: auto; }
+      #start {
+        position: fixed; inset: 0; z-index: 10;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(6,8,13,.78);
+      }
+      #start[hidden] { display: none; }
+      #start .panel {
+        width: min(720px, 92vw); max-height: 80vh; overflow: auto;
+        padding: 18px 20px; border-radius: 8px;
+        background: rgba(13,15,22,.97); border: 1px solid rgba(140,160,220,.35);
+      }
+      #start .panel h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #ffd76e; }
+      #start .hint { margin-bottom: 12px; color: #59618a; }
+      #start-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
+      .start-item {
+        display: block; text-align: left; font: inherit; cursor: pointer;
+        padding: 6px 10px; border-radius: 6px; color: #cdd6ff;
+        background: rgba(140,160,220,.08); border: 1px solid rgba(140,160,220,.25);
+      }
+      .start-item:hover, .start-item:focus-visible {
+        background: rgba(140,160,220,.2); border-color: rgba(140,160,220,.6);
+      }
+      .start-item b { color: #fff; font-weight: 600; }
+      .start-item .meta { margin-left: 8px; color: #8f9ac4; }
+      .start-item .res { display: block; color: #59618a; }
     </style>
   </head>
   <body>
     <canvas id="map"></canvas>
-    <div id="hud"><b id="seed">seed 1</b> · <span id="zoom">zoom —</span> · <span id="tile">тайл —</span> · <button id="zones" class="hud-btn" aria-pressed="true" type="button">зоны</button></div>
+    <div id="hud"><b id="seed">seed 1</b> · <span id="zoom">zoom —</span> · <span id="tile">тайл —</span> · <span id="clock">день 1 · ×1</span> · <button id="zones" class="hud-btn" aria-pressed="true" type="button">зоны</button> · <button class="hud-btn speed-btn" data-speed="0" aria-pressed="false" type="button">‖</button> <button class="hud-btn speed-btn" data-speed="1" aria-pressed="true" type="button">×1</button> <button class="hud-btn speed-btn" data-speed="2" aria-pressed="false" type="button">×2</button> <button class="hud-btn speed-btn" data-speed="4" aria-pressed="false" type="button">×4</button></div>
+    <div id="start">
+      <div class="panel">
+        <h1>Куда едем?</h1>
+        <div class="hint">выбери город, с которого начнёшь дело — карта подстроится под него</div>
+        <div id="start-list"></div>
+      </div>
+    </div>
     <div id="strip">
       <section id="feed">
         <div class="head">лента</div>

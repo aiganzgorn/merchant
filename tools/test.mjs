@@ -867,3 +867,25 @@ assert.ok(forestPoi.reserve > 0, "лес восстанавливается");
 assert.ok(forestPoi.reserve <= forestMax, "запас леса не превышает reserveMax");
 
 console.log("ok — сутки: уровни, голод, рост, истощение, часы");
+
+// --- стартовый список и часы ------------------------------------------------
+import { clockText, startListHtml } from "../src/ui.ts";
+
+assert.ok(clockText({ day: 3, speed: 2, acc: 0 }).includes("день 3"), "часы называют день");
+assert.ok(clockText({ day: 3, speed: 2, acc: 0 }).includes("×2"), "часы называют скорость");
+assert.ok(clockText({ day: 1, speed: 0, acc: 0 }).includes("‖") || clockText({ day: 1, speed: 0, acc: 0 }).includes("×0"), "пауза видна в часах");
+
+const startWorld = generateWorld(42);
+const startHtml = startListHtml(startWorld);
+assert.ok(startHtml.includes(startWorld.settlements[0].name), "в списке есть имя поселения");
+assert.equal(startHtml.split("start-item").length - 1, startWorld.settlements.length, "в списке все поселения");
+
+const byPopulation = [...startWorld.settlements].sort((a, b) => b.population - a.population).map((s) => s.name);
+let orderPos = -1;
+for (const name of byPopulation) {
+  const at = startHtml.indexOf(name, orderPos + 1);
+  assert.ok(at > orderPos, `список по убыванию населения: ${name}`);
+  orderPos = at;
+}
+
+console.log("ok — стартовый список и часы");
