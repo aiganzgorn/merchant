@@ -48,11 +48,11 @@ export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 import { BIOME, POI, RESOURCE } from "./world.ts";
 
 export type CultureRegionTemplate = {
-  name: string;         // «шипящий», «твёрдый» — для отладки
+  name: string;         // debug label, e.g. "шипящий", "твёрдый"
   onset: string[]; vowel: string[]; coda: string[];
-  endings: string[];    // по одному из них кончается ≥80% имён края
+  endings: string[];    // ≥80% of this culture's settlement names end with one of these
   roots: string[];
-  genitive: string;     // чем имя кончается в родительном падеже
+  genitive: string;     // suffix used in the genitive case for enterprise names
 };
 
 export const CULTURES: CultureRegionTemplate[] = [
@@ -61,7 +61,7 @@ export const CULTURES: CultureRegionTemplate[] = [
   { name: "плавный", onset: ["л", "м", "н", "в"], vowel: ["и", "е", "а"], coda: ["л", "н", "м"], endings: ["эль", "иль", "ан"], roots: ["Лан", "Мил", "Вел"], genitive: "я" },
   { name: "свистящий", onset: ["с", "з", "ц", "ч"], vowel: ["а", "ы", "у"], coda: ["с", "з", "ц"], endings: ["са", "зы", "ца"], roots: ["Сав", "Зыр", "Цал"], genitive: "ы" },
   { name: "гортанный", onset: ["х", "г", "к", "б"], vowel: ["а", "о", "э"], coda: ["х", "г", "б"], endings: ["ха", "го", "ба"], roots: ["Хаг", "Бор", "Гор"], genitive: "а" },
-  { name: "мягкий", onset: ["л", "нь", "рь", "й"], vowel: ["я", "е", "и"], coda: ["ль", "нь", "рь"], endings: ["ль", "нь", "я"], roots: ["Ли", "Нье", "Рья"], genitive: "и" },
+  { name: "мягкий", onset: ["л", "нь", "рь", "й"], vowel: ["я", "е", "и"], coda: ["ль", "нь", "рь"], endings: ["мя", "нь", "я"], roots: ["Ли", "Нье", "Рья"], genitive: "и" },
   { name: "северный", onset: ["т", "в", "с", "к"], vowel: ["о", "э", "и"], coda: ["ст", "рн", "льд"], endings: ["стад", "борг", "вик"], roots: ["Тор", "Вик", "Стар"], genitive: "а" },
   { name: "южный", onset: ["м", "н", "ар", "са"], vowel: ["а", "и", "о"], coda: ["р", "н", "м"], endings: ["мар", "нат", "ри"], roots: ["Ам", "Сан", "Нат"], genitive: "и" },
 ];

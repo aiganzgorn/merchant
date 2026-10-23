@@ -458,7 +458,19 @@ for (const c of w1.cultures) {
 
 const w1b = generateWorld(42);
 assert.deepEqual(w1.settlements.map((s) => s.name), w1b.settlements.map((s) => s.name), "имена детерминированы");
-console.log("ok — края и имена: покрытие, 500 имён, окончания, детерминизм");
+
+for (let a = 0; a < w1.cultures.length; a++) {
+  for (let b = 0; b < w1.cultures.length; b++) {
+    if (a === b) continue;
+    for (const ea of w1.cultures[a].endings) {
+      for (const eb of w1.cultures[b].endings) {
+        assert.ok(!ea.endsWith(eb) && !eb.endsWith(ea),
+          `окончания краёв ${w1.cultures[a].name} и ${w1.cultures[b].name} пересекаются: ${ea}, ${eb}`);
+      }
+    }
+  }
+}
+console.log("ok — края и имена: покрытие, 500 имён, окончания, детерминизм, уникальность окончаний");
 
 // --- POI rendering ------------------------------------------------------------
 import { visiblePois, poiAt } from "../src/render.ts";

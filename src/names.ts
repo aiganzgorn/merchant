@@ -15,11 +15,15 @@ function capitalize(s: string): string {
   return s[0].toUpperCase() + s.slice(1).toLowerCase();
 }
 
+function buildSyllable(onset: string[], vowel: string[], coda: string[], rng: Rng): string {
+  const o = pick(onset, rng);
+  const v = pick(vowel, rng);
+  const cd = rng() < 0.5 ? pick(coda, rng) : "";
+  return o + v + cd;
+}
+
 function makeSyllable(culture: CultureRegion, rng: Rng): string {
-  const onset = pick(culture.onset, rng);
-  const vowel = pick(culture.vowel, rng);
-  const coda = rng() < 0.5 ? pick(culture.coda, rng) : "";
-  return onset + vowel + coda;
+  return buildSyllable(culture.onset, culture.vowel, culture.coda, rng);
 }
 
 function makeRandomName(culture: CultureRegion, rng: Rng): string {
@@ -159,14 +163,39 @@ export function buildRegions(world: World): { regionOf: Int16Array; cultures: Cu
     sizes[into] += sizes[from];
     sizes[from] = 0;
     // the absorbing region keeps its own culture; only its geometry grows.
-    recomputeBorders();
+    // update border lengths incrementally instead of rescanning the whole map.
+    const absorbed: { other: number; len: number }[] = [];
+    for (const [key, len] of borders) {
+      const [a, b] = key.split(",").map(Number);
+      if (a !== from && b !== from) continue;
+      const other = a === from ? b : a;
+      if (other !== into) absorbed.push({ other, len });
+      borders.delete(key);
+    }
+    for (const { other, len } of absorbed) {
+      const key = borderKey(into, other);
+      borders.set(key, (borders.get(key) || 0) + len);
+    }
   };
 
-  // merge down to the desired cap, always starting with the smallest region.
-  // a region below the minimum land share wins first, so tiny pockets disappear early.
+  const threshold = MIN_REGION_SHARE * totalLand;
+
+  // First absorb every region below the minimum land share, smallest first.
+  // Stop if only 3 regions remain so the world always has several cultures.
+  while (activeRegions().length > 3) {
+    let victim = -1, victimSize = Infinity;
+    for (const r of activeRegions()) {
+      if (sizes[r] < threshold && sizes[r] < victimSize) { victim = r; victimSize = sizes[r]; }
+    }
+    if (victim < 0) break;
+    const nb = findBestNeighbor(victim);
+    if (nb < 0) break;
+    merge(victim, nb);
+  }
+
+  // Then trim down to the desired cap.
   while (activeRegions().length > MAX_REGIONS) {
-    const r = findSmallest(true);
-    const victim = r >= 0 ? r : findSmallest(false);
+    const victim = findSmallest(false);
     if (victim < 0) break;
     const nb = findBestNeighbor(victim);
     if (nb < 0) break;
@@ -219,17 +248,22 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
   const used = new Set<string>();
   const stateUsed = new Set<string>();
 
+  const uniqueName = (name: string): string | null => {
+    if (name.length < NAME_MIN || name.length > NAME_MAX) return null;
+    const key = name.toLowerCase();
+    if (used.has(key)) return null;
+    used.add(key);
+    return name;
+  };
+
   const regionName = (region: number): string => {
     const culture = cultures[region];
-    if (!culture) return "Посёлок";
+    if (!culture) return fallbackName(pick(["Село", "Град", "Посад"], rng));
 
     for (let t = 0; t < NAME_TRIES; t++) {
       const name = makeRandomName(culture, rng);
-      if (name.length < NAME_MIN || name.length > NAME_MAX) continue;
-      const key = name.toLowerCase();
-      if (used.has(key)) continue;
-      used.add(key);
-      return name;
+      const ok = uniqueName(name);
+      if (ok) return ok;
     }
 
     // systematic fallback: roots × endings × extra syllables.
@@ -239,17 +273,27 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
           let suffix = "";
           for (let e = 0; e < extra; e++) suffix += pick(culture.vowel, rng) + pick(culture.coda, rng);
           const name = capitalize(`${root}${ending}${suffix}`);
-          if (name.length < NAME_MIN || name.length > NAME_MAX) continue;
-          const key = name.toLowerCase();
-          if (used.has(key)) continue;
-          used.add(key);
-          return name;
+          const ok = uniqueName(name);
+          if (ok) return ok;
         }
       }
     }
 
-    return `Посёлок${region}`;
+    // last resort: accumulate syllables until the name is long enough and unique.
+    let last = capitalize(pick(culture.onset, rng) + pick(culture.vowel, rng));
+    while (last.length < NAME_MIN) last += makeSyllable(culture, rng);
+    const ok = uniqueName(last);
+    return ok || fallbackName(capitalize(pick(culture.onset, rng) + pick(culture.vowel, rng)));
   };
+
+  function fallbackName(base: string): string {
+    let name = base;
+    while (!uniqueName(name)) {
+      name += buildSyllable(["в", "н", "с", "р"], ["а", "о", "е"], ["н", "р", "в"], rng);
+      if (name.length > NAME_MAX) name = name.slice(0, NAME_MAX);
+    }
+    return name;
+  }
 
   return {
     settlement(region: number): string {
@@ -264,22 +308,30 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
 
     state(region: number): string {
       const culture = cultures[region];
-      if (!culture) return `Княжество ${region}`;
+      const take = (name: string): string | null => {
+        const key = name.toLowerCase();
+        if (stateUsed.has(key)) return null;
+        stateUsed.add(key);
+        return name;
+      };
+      if (!culture) {
+        const name = take("Княжество");
+        return name || take("Владение") || "Государство";
+      }
       for (const root of culture.roots) {
         for (const suffix of ["ия", "ство"]) {
-          const name = capitalize(`${root}${suffix}`);
-          const key = name.toLowerCase();
-          if (stateUsed.has(key)) continue;
-          stateUsed.add(key);
-          return name;
+          const name = take(capitalize(`${root}${suffix}`));
+          if (name) return name;
         }
       }
-      return capitalize(`${culture.roots[0]}ия`);
+      const last = take(capitalize(`${culture.roots[0]}ия`));
+      return last || take("Княжество") || "Государство";
     },
   };
 }
 
-// If a settlement lands on an unwalled tile (should not happen), adopt the nearest land region.
+// If a settlement lands on an unwalled tile (should not happen), adopt the nearest land
+// region within the spiral radius. If nothing is found, fall back to the largest region.
 export function nearestRegion(world: World, x: number, y: number, radius = 8): number {
   const i = y * world.w + x;
   const r = world.regionOf[i];
@@ -295,5 +347,9 @@ export function nearestRegion(world: World, x: number, y: number, radius = 8): n
       }
     }
   }
-  return 0;
+  let best = 0, bestTiles = -1;
+  for (const c of world.cultures) {
+    if (c.tiles > bestTiles) { bestTiles = c.tiles; best = c.id; }
+  }
+  return best;
 }
