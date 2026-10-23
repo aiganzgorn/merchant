@@ -908,3 +908,28 @@ assert.equal(settlementAt(cardWorld, cardCam, 800, 600, cardPt.x + 2, cardPt.y +
 assert.equal(settlementAt(cardWorld, cardCam, 800, 600, cardPt.x + 60, cardPt.y + 60), null, "клик мимо домика не выбирает поселение");
 
 console.log("ok — карточка поселения и попадание по домику");
+
+// --- подписи поселений -------------------------------------------------------
+import { layoutSettlementLabels } from "../src/render.ts";
+
+const labelWorld = generateWorld(42);
+const labelCam = { x: labelWorld.settlements[0].x, y: labelWorld.settlements[0].y, zoom: 8 };
+const measure = (text) => text.length * 7;
+const labels = layoutSettlementLabels(labelWorld, labelCam, 900, 600, measure);
+assert.ok(labels.length > 0, "на карте есть подписи");
+assert.ok(labels.length <= labelWorld.settlements.length, "подписей не больше, чем поселений");
+for (const l of labels) {
+  assert.ok(labelWorld.settlements.some((s) => s.name === l.text), `подпись принадлежит поселению: ${l.text}`);
+  assert.ok(l.x >= 0 && l.x + l.w <= 900, `подпись ${l.text} в кадре по x`);
+  assert.ok(l.y >= 0 && l.y + l.h <= 600, `подпись ${l.text} в кадре по y`);
+}
+for (let i = 0; i < labels.length; i++) {
+  for (let j = i + 1; j < labels.length; j++) {
+    const a = labels[i], b = labels[j];
+    const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    assert.ok(!overlap, `подписи ${a.text} и ${b.text} не накладываются`);
+  }
+}
+assert.equal(layoutSettlementLabels(labelWorld, { ...labelCam, zoom: 1.2 }, 900, 600, measure).length, 0, "на общем плане подписи скрыты");
+
+console.log("ok — подписи поселений: в кадре, без наложений, скрыты на общем плане");

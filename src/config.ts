@@ -106,9 +106,13 @@ export const REGEN_RATE = 0.01;
 export const ABANDON_POP = 20;
 
 // settlements on the map
+export const SETTLEMENT_LABEL_COLOR = "#ffe9a8"; // settlement name ink, lighter than the roof
 export const SETTLEMENT_COLOR = "#ffd76e";     // a living town
 export const SETTLEMENT_ABANDONED = "#59618a"; // an abandoned one — outline only
 export const SETTLEMENT_ICON_MAX = 14;         // px radius cap when zoomed in
+export const LABEL_FONT_PX = 12;                // settlement name size, px
+export const LABEL_OFFSET = 13;                 // px between a house and its name
+export const LABEL_ZOOM_MIN = 4;                // below this zoom names would be a wall of text
 
 // world time
 export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world

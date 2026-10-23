@@ -4,6 +4,7 @@ import {
   POI_ICON_PX, POI_ICON_MAX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
   POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
   SETTLEMENT_COLOR, SETTLEMENT_ABANDONED, SETTLEMENT_ICON_MAX,
+  SETTLEMENT_LABEL_COLOR, LABEL_FONT_PX, LABEL_OFFSET, LABEL_ZOOM_MIN,
 } from "./config.ts";
 import type { Poi, Settlement, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
@@ -321,6 +322,44 @@ export function drawSettlements(
   }
 }
 
+export type SettlementLabel = { text: string; x: number; y: number; w: number; h: number };
+
+// Greedy label placement: biggest towns claim their name first, a name that would
+// overlap one already placed is dropped until the map is zoomed in further.
+export function layoutSettlementLabels(
+  world: World, cam: Camera, vw: number, vh: number, measure: (text: string) => number,
+): SettlementLabel[] {
+  if (cam.zoom < LABEL_ZOOM_MIN) return [];
+  const h = LABEL_FONT_PX;
+  const placed: SettlementLabel[] = [];
+  const towns = world.settlements.filter((s) => !s.abandoned).sort((a, b) => b.population - a.population);
+  for (const s of towns) {
+    const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
+    const w = Math.ceil(measure(s.name));
+    const x = Math.round(p.x - w / 2);
+    const y = Math.round(p.y - LABEL_OFFSET - h);
+    if (x < 0 || y < 0 || x + w > vw || y + h > vh) continue;
+    if (placed.some((o) => x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h)) continue;
+    placed.push({ text: s.name, x, y, w, h });
+  }
+  return placed;
+}
+
+export function drawSettlementLabels(
+  ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number,
+): void {
+  ctx.font = `${LABEL_FONT_PX}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  const placed = layoutSettlementLabels(world, cam, vw, vh, (text) => ctx.measureText(text).width);
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = POI_GLYPH_STROKE;
+  for (const l of placed) ctx.strokeText(l.text, l.x, l.y);
+  ctx.fillStyle = SETTLEMENT_LABEL_COLOR;
+  for (const l of placed) ctx.fillText(l.text, l.x, l.y);
+}
+
 export function draw(
   ctx: CanvasRenderingContext2D, world: World, chunks: HTMLCanvasElement[],
   cam: Camera, vw: number, vh: number, zones = true,
@@ -343,4 +382,5 @@ export function draw(
   drawRivers(ctx, world, cam, vw, vh);
   drawPois(ctx, world, cam, vw, vh, zones);
   drawSettlements(ctx, world, cam, vw, vh);
+  drawSettlementLabels(ctx, world, cam, vw, vh);
 }
