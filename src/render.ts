@@ -3,8 +3,9 @@ import {
   CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP,
   POI_ICON_PX, POI_ICON_MAX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
   POI_FALLBACK_COLOR, POI_GLYPH_STROKE,
+  SETTLEMENT_COLOR, SETTLEMENT_ABANDONED, SETTLEMENT_ICON_MAX,
 } from "./config.ts";
-import type { Poi, World } from "./world.ts";
+import type { Poi, Settlement, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
 
 const RIVER_COLOR = "#2b6ea8";
@@ -278,6 +279,48 @@ export function poiAt(world: World, cam: Camera, vw: number, vh: number, sx: num
   return best;
 }
 
+export function settlementAt(world: World, cam: Camera, vw: number, vh: number, sx: number, sy: number): Settlement | null {
+  let best: Settlement | null = null;
+  let bestDist = Infinity;
+  const hit = POI_HIT_PX + 4; // a house is drawn a bit wider than a POI badge
+  for (const s of world.settlements) {
+    const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
+    const d = Math.hypot(p.x - sx, p.y - sy);
+    if (d <= hit && d < bestDist) {
+      best = s;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+// Houses sit above POI badges: a town is the main thing on the map.
+export function drawSettlements(
+  ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number,
+): void {
+  for (const s of world.settlements) {
+    const p = worldToScreen(cam, vw, vh, s.x + 0.5, s.y + 0.5);
+    const r = Math.min(SETTLEMENT_ICON_MAX, Math.max(4, POI_ICON_PX * cam.zoom / 6));
+    const w = r * 1.7, h = r * 1.5;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = s.abandoned ? SETTLEMENT_ABANDONED : POI_GLYPH_STROKE;
+    ctx.fillStyle = SETTLEMENT_COLOR;
+
+    ctx.beginPath(); // body
+    ctx.rect(p.x - w / 2, p.y - h * 0.1, w, h * 0.6);
+    if (!s.abandoned) ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath(); // roof
+    ctx.moveTo(p.x - w * 0.62, p.y - h * 0.1);
+    ctx.lineTo(p.x, p.y - h * 0.8);
+    ctx.lineTo(p.x + w * 0.62, p.y - h * 0.1);
+    ctx.closePath();
+    if (!s.abandoned) ctx.fill();
+    ctx.stroke();
+  }
+}
+
 export function draw(
   ctx: CanvasRenderingContext2D, world: World, chunks: HTMLCanvasElement[],
   cam: Camera, vw: number, vh: number, zones = true,
@@ -299,4 +342,5 @@ export function draw(
 
   drawRivers(ctx, world, cam, vw, vh);
   drawPois(ctx, world, cam, vw, vh, zones);
+  drawSettlements(ctx, world, cam, vw, vh);
 }

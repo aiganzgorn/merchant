@@ -54,17 +54,16 @@ function consumeFromGroup(stock: Float32Array, resources: number[], need: number
 export function settlementCard(s: Settlement) {
   const levelName = LEVEL_NAMES[s.level];
   const open = availableTiers(s.level);
-  const needs: { label: string; ok: boolean; have: number; need: number }[] = [];
+  const needs: { label: string; ok: boolean; have: number; need: number; water?: boolean }[] = [];
   for (let t = 0; t < open; t++) {
     for (const need of NEED_TIERS[t]) {
       const n = s.population * need.perCapita;
       if (need.water) {
-        needs.push({ label: need.label, ok: s.water, have: s.water ? 1 : 0, need: 1 });
+        needs.push({ label: need.label, ok: s.water, have: s.water ? 1 : 0, need: 1, water: true });
       } else {
         const have = groupStock(s.stock, need.resources);
         needs.push({ label: need.label, ok: have >= n, have, need: n });
-      }
-    }
+      }    }
   }
   return { levelName, needs };
 }

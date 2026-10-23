@@ -105,6 +105,11 @@ export const PRODUCE_PER_DAY = 8;
 export const REGEN_RATE = 0.01;
 export const ABANDON_POP = 20;
 
+// settlements on the map
+export const SETTLEMENT_COLOR = "#ffd76e";     // a living town
+export const SETTLEMENT_ABANDONED = "#59618a"; // an abandoned one — outline only
+export const SETTLEMENT_ICON_MAX = 14;         // px radius cap when zoomed in
+
 // world time
 export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world
 export const ZOOM_PICK = 6;           // zoom when the player picks a town from the start list

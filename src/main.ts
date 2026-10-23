@@ -1,12 +1,12 @@
 // Browser entry point: canvas, camera, wheel zoom, drag pan, the bottom strip.
 import { STRIP_H, MAP_W, MAP_H, ZOOM_START, MAX_FRAME_SECONDS, ZOOM_PICK } from "./config.ts";
 import { generateWorld, seedFromQuery } from "./gen.ts";
-import { prerender, draw, poiAt } from "./render.ts";
+import { prerender, draw, poiAt, settlementAt } from "./render.ts";
 import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Camera } from "./camera.ts";
 import { poiCard, isClick, declPoints, declTiles } from "./poi-card.ts";
 import { advance, type Sim, type Speed } from "./sim.ts";
 import { stepDay } from "./settlements.ts";
-import { clockText, pushEvent, startListHtml } from "./ui.ts";
+import { clockText, pushEvent, startListHtml, showSettlement } from "./ui.ts";
 import type { Poi } from "./world.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
@@ -24,8 +24,8 @@ const chunks = prerender(world);
 
 $("seed").textContent = `seed ${seed}`;
 
-// Default "мои дела" markup lives in index.html; capture it once for reuse.
-const defaultCardHtml = $("deals-body").innerHTML;
+// The base "мои дела" card lives in src/ui.ts, so a click on empty map restores it.
+showSettlement(world, null);
 
 // ?zoom=8 opens the world at a given scale — handy for looking at the whole map.
 const zoomParam = Number(new URLSearchParams(location.search).get("zoom"));
@@ -120,6 +120,11 @@ canvas.addEventListener("pointerup", (e) => {
   const wasClick = isClick(dx, dy, CLICK_DRAG_THRESHOLD);
   endDrag(e);
   if (wasClick) {
+    const town = settlementAt(world, cam, view.w, view.h, e.clientX, e.clientY);
+    if (town) {
+      showSettlement(world, town);
+      return;
+    }
     const p = poiAt(world, cam, view.w, view.h, e.clientX, e.clientY);
     showCard(p);
   }
@@ -129,11 +134,11 @@ canvas.addEventListener("pointercancel", endDrag);
 canvas.addEventListener("pointerleave", () => { cursorEl.textContent = "тайл —"; });
 
 function showCard(poi: Poi | null): void {
-  const body = $("deals-body");
   if (!poi) {
-    body.innerHTML = defaultCardHtml;
+    showSettlement(world, null);
     return;
   }
+  const body = $("deals-body");
   const info = poiCard(world, poi);
   const yieldPct = Math.round(info.yield * 100);
   const dist = info.nearestSettlement ? `${Math.round(info.nearestSettlement.dist)} ${declTiles(Math.round(info.nearestSettlement.dist))}` : "нет поселений";

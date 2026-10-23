@@ -889,3 +889,22 @@ for (const name of byPopulation) {
 }
 
 console.log("ok — стартовый список и часы");
+
+// --- карточка поселения и попадание по домику -------------------------------
+import { settlementCardHtml } from "../src/ui.ts";
+import { settlementAt } from "../src/render.ts";
+
+const cardWorld = generateWorld(42);
+const cardTown = cardWorld.settlements[0];
+const cardHtml = settlementCardHtml(cardWorld, cardTown);
+assert.ok(cardHtml.includes(cardTown.name), "в карточке имя");
+assert.ok(cardHtml.includes("хутор"), "в карточке ступень");
+assert.ok(cardHtml.includes("население"), "в карточке население");
+assert.ok(cardHtml.includes("еда"), "в карточке потребности");
+
+const cardCam = { x: cardTown.x, y: cardTown.y, zoom: 8 };
+const cardPt = worldToScreen(cardCam, 800, 600, cardTown.x + 0.5, cardTown.y + 0.5);
+assert.equal(settlementAt(cardWorld, cardCam, 800, 600, cardPt.x + 2, cardPt.y + 2), cardTown, "клик по домику попадает в поселение");
+assert.equal(settlementAt(cardWorld, cardCam, 800, 600, cardPt.x + 60, cardPt.y + 60), null, "клик мимо домика не выбирает поселение");
+
+console.log("ok — карточка поселения и попадание по домику");
