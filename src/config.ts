@@ -73,6 +73,20 @@ export const POI_BIOMES: Record<number, number[]> = {
   [7]: [BIOME.mountain],        // mine
 };
 
+export const POI_ICON_PX = 9;      // badge radius in screen pixels, constant at any zoom
+export const POI_HIT_PX = 12;      // screen-pixel radius for mouse selection
+export const POI_ZONE_ALPHA = 0.10; // placement-zone fill transparency
+export const POI_COLORS: Record<number, string> = {
+  [0]: "#5d8a4e", // logging — forest green
+  [1]: "#8b5a3a", // hunting — hide brown
+  [2]: "#4b8bb8", // fishing — water blue
+  [3]: "#c4b9c2", // salt — pale crystal
+  [4]: "#d4a843", // farm — ripe grain
+  [5]: "#a68958", // pasture — dry grass
+  [6]: "#7a7a7a", // quarry — stone grey
+  [7]: "#a05050", // mine — rusted ore
+};
+
 // camera
 export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits
 export const ZOOM_MAX = 48;      // px per tile, closest

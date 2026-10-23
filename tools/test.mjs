@@ -387,3 +387,29 @@ test("точки: биом, запасы, скрытая руда, поселе�
 });
 
 console.log("ok — точки интереса и поселения: биомы, запасы, скрытая руда, близость воды/леса");
+
+// --- POI rendering ------------------------------------------------------------
+import { visiblePois, poiAt } from "../src/render.ts";
+
+test("POI render: visiblePois returns only known points", () => {
+  const w = generateWorld(42);
+  const visible = visiblePois(w);
+  assert.ok(visible.every((p) => p.known), "visiblePois contains only known points");
+  assert.ok(w.poi.filter((p) => p.known).every((p) => visible.includes(p)), "every known POI is visible");
+  assert.equal(visible.filter((p) => p.kind === POI.mine).length, 0, "hidden mines are excluded");
+});
+
+test("poiAt finds a POI at its screen centre and returns null in empty space", () => {
+  const w = generateWorld(42);
+  const cam = { x: w.w / 2, y: w.h / 2, zoom: 20 };
+  const vw = 800, vh = 600;
+  const p = w.poi.find((p) => p.known);
+  assert.ok(p, "there is at least one known POI");
+  const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
+  const hit = poiAt(w, cam, vw, vh, s.x, s.y);
+  assert.equal(hit?.x, p.x, "poiAt hits POI centre");
+  assert.equal(hit?.y, p.y, "poiAt hits POI centre y");
+  assert.equal(poiAt(w, cam, vw, vh, 0, 0), null, "poiAt misses empty corner");
+});
+
+console.log("ok — POI рендеринг: видимые точки, попадание по экранным координатам");

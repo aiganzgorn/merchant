@@ -1,6 +1,9 @@
 // Terrain rendering: chunks are prerendered once and blitted with the camera.
-import { CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP } from "./config.ts";
-import type { World } from "./world.ts";
+import {
+  CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP,
+  POI_ICON_PX, POI_HIT_PX, POI_ZONE, POI_ZONE_ALPHA, POI_COLORS,
+} from "./config.ts";
+import type { Poi, World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
 
 const RIVER_COLOR = "#2b6ea8";
@@ -119,9 +122,148 @@ function strokeRun(
   ctx.stroke();
 }
 
+// Points of interest: icons stay at a constant screen size so they are readable at any zoom.
+export function visiblePois(world: World): Poi[] {
+  return world.poi.filter((p) => p.known);
+}
+
+function glyph(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number, r: number): void {
+  ctx.fillStyle = "#0d0f16";
+  ctx.strokeStyle = "#0d0f16";
+  ctx.lineWidth = Math.max(1, r * 0.22);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  switch (kind) {
+    case 0: { // logging — pine tree
+      ctx.beginPath();
+      ctx.moveTo(x, y - r * 0.75);
+      ctx.lineTo(x - r * 0.55, y + r * 0.45);
+      ctx.lineTo(x + r * 0.55, y + r * 0.45);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 1: { // hunting — two antler arcs
+      ctx.beginPath();
+      ctx.arc(x - r * 0.2, y + r * 0.25, r * 0.45, -Math.PI * 0.85, -Math.PI * 0.25);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + r * 0.2, y + r * 0.25, r * 0.45, -Math.PI * 0.75, -Math.PI * 0.15, true);
+      ctx.stroke();
+      break;
+    }
+    case 2: { // fishing — fish with tail
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.05, y, r * 0.45, r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x + r * 0.3, y);
+      ctx.lineTo(x + r * 0.75, y - r * 0.35);
+      ctx.lineTo(x + r * 0.75, y + r * 0.35);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 3: { // salt — crystal diamond
+      ctx.beginPath();
+      ctx.moveTo(x, y - r * 0.7);
+      ctx.lineTo(x + r * 0.55, y);
+      ctx.lineTo(x, y + r * 0.7);
+      ctx.lineTo(x - r * 0.55, y);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 4: { // farm — three ears of grain
+      for (let i = -1; i <= 1; i++) {
+        const gx = x + i * r * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(gx, y + r * 0.45);
+        ctx.lineTo(gx + i * r * 0.12, y - r * 0.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(gx + i * r * 0.06, y - r * 0.25, r * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 5: { // pasture — bull head with horns
+      ctx.beginPath();
+      ctx.arc(x, y + r * 0.15, r * 0.45, Math.PI, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.3, y - r * 0.2);
+      ctx.lineTo(x - r * 0.6, y - r * 0.6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + r * 0.3, y - r * 0.2);
+      ctx.lineTo(x + r * 0.6, y - r * 0.6);
+      ctx.stroke();
+      break;
+    }
+    case 6: { // quarry — pickaxe
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.45, y - r * 0.25);
+      ctx.lineTo(x + r * 0.35, y + r * 0.55);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x - r * 0.05, y - r * 0.1, r * 0.42, -Math.PI * 0.7, Math.PI * 0.25);
+      ctx.stroke();
+      break;
+    }
+    default: { // mine and future kinds — a simple dot
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+  }
+}
+
+export function drawPois(
+  ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number, zones: boolean,
+): void {
+  for (const p of visiblePois(world)) {
+    const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
+    const color = POI_COLORS[p.kind] ?? "#999999";
+
+    if (zones) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, POI_ZONE * cam.zoom, 0, Math.PI * 2);
+      ctx.fillStyle = color + Math.round(POI_ZONE_ALPHA * 255).toString(16).padStart(2, "0");
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, POI_ICON_PX, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#0d0f16";
+    ctx.stroke();
+
+    glyph(ctx, p.kind, s.x, s.y, POI_ICON_PX);
+  }
+}
+
+export function poiAt(world: World, cam: Camera, vw: number, vh: number, sx: number, sy: number): Poi | null {
+  let best: Poi | null = null;
+  let bestDist = Infinity;
+  for (const p of visiblePois(world)) {
+    const s = worldToScreen(cam, vw, vh, p.x + 0.5, p.y + 0.5);
+    const d = Math.hypot(s.x - sx, s.y - sy);
+    if (d <= POI_HIT_PX && d < bestDist) {
+      best = p;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
 export function draw(
   ctx: CanvasRenderingContext2D, world: World, chunks: HTMLCanvasElement[],
-  cam: Camera, vw: number, vh: number,
+  cam: Camera, vw: number, vh: number, zones = true,
 ): void {
   ctx.fillStyle = "#0d0f16";
   ctx.fillRect(0, 0, vw, vh);
@@ -139,4 +281,5 @@ export function draw(
   }
 
   drawRivers(ctx, world, cam, vw, vh);
+  drawPois(ctx, world, cam, vw, vh, zones);
 }
