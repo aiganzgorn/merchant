@@ -247,6 +247,8 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
   const rng = mulberry32(seed + 12000);
   const used = new Set<string>();
   const stateUsed = new Set<string>();
+  let fallbackCounter = 0;
+  let stateFallbackCounter = 0;
 
   const uniqueName = (name: string): string | null => {
     if (name.length < NAME_MIN || name.length > NAME_MAX) return null;
@@ -254,6 +256,39 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
     if (used.has(key)) return null;
     used.add(key);
     return name;
+  };
+
+  const uniqueState = (name: string): string | null => {
+    const key = name.toLowerCase();
+    if (stateUsed.has(key)) return null;
+    stateUsed.add(key);
+    return name;
+  };
+
+  // Convert a positive integer to a Cyrillic tag (base-33, no digits).
+  const cyrTag = (n: number): string => {
+    const letters = "абвгдежзийклмнопрстуфхцчшщъыьэюя";
+    let s = "";
+    while (n > 0) {
+      s = letters[(n - 1) % letters.length] + s;
+      n = Math.floor((n - 1) / letters.length);
+    }
+    return s || letters[0];
+  };
+
+  // Guaranteed-terminating fallback: base + "-" + fresh Cyrillic counter tag.
+  const fallbackName = (base: string): string => {
+    fallbackCounter++;
+    const tag = cyrTag(fallbackCounter);
+    const maxPrefix = NAME_MAX - tag.length - 1;
+    for (let len = Math.min(base.length, maxPrefix); len >= 0; len--) {
+      const prefix = base.slice(0, len);
+      const name = prefix ? `${prefix}-${tag}` : tag;
+      const ok = uniqueName(name);
+      if (ok) return ok;
+    }
+    // Should be unreachable: even an empty prefix gives a fresh tag-based name.
+    return uniqueName(tag) || tag;
   };
 
   const regionName = (region: number): string => {
@@ -279,21 +314,8 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
       }
     }
 
-    // last resort: accumulate syllables until the name is long enough and unique.
-    let last = capitalize(pick(culture.onset, rng) + pick(culture.vowel, rng));
-    while (last.length < NAME_MIN) last += makeSyllable(culture, rng);
-    const ok = uniqueName(last);
-    return ok || fallbackName(capitalize(pick(culture.onset, rng) + pick(culture.vowel, rng)));
+    return fallbackName(capitalize(pick(culture.onset, rng) + pick(culture.vowel, rng)));
   };
-
-  function fallbackName(base: string): string {
-    let name = base;
-    while (!uniqueName(name)) {
-      name += buildSyllable(["в", "н", "с", "р"], ["а", "о", "е"], ["н", "р", "в"], rng);
-      if (name.length > NAME_MAX) name = name.slice(0, NAME_MAX);
-    }
-    return name;
-  }
 
   return {
     settlement(region: number): string {
@@ -308,15 +330,9 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
 
     state(region: number): string {
       const culture = cultures[region];
-      const take = (name: string): string | null => {
-        const key = name.toLowerCase();
-        if (stateUsed.has(key)) return null;
-        stateUsed.add(key);
-        return name;
-      };
+      const take = (name: string): string | null => uniqueState(name);
       if (!culture) {
-        const name = take("Княжество");
-        return name || take("Владение") || "Государство";
+        return take("Княжество") || take("Владение") || take("Государство") || fallbackState();
       }
       for (const root of culture.roots) {
         for (const suffix of ["ия", "ство"]) {
@@ -325,9 +341,23 @@ export function createNamer(seed: number, cultures: CultureRegion[]): Namer {
         }
       }
       const last = take(capitalize(`${culture.roots[0]}ия`));
-      return last || take("Княжество") || "Государство";
+      return last || take("Княжество") || take("Владение") || take("Государство") || fallbackState();
     },
   };
+
+  function fallbackState(): string {
+    stateFallbackCounter++;
+    const tag = cyrTag(stateFallbackCounter);
+    const base = "Государство";
+    const maxPrefix = NAME_MAX - tag.length - 1;
+    for (let len = Math.min(base.length, maxPrefix); len >= 0; len--) {
+      const prefix = base.slice(0, len);
+      const name = prefix ? `${prefix}-${tag}` : tag;
+      const ok = uniqueState(name);
+      if (ok) return ok;
+    }
+    return uniqueState(tag) || tag;
+  }
 }
 
 // If a settlement lands on an unwalled tile (should not happen), adopt the nearest land

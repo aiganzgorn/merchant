@@ -472,6 +472,22 @@ for (let a = 0; a < w1.cultures.length; a++) {
 }
 console.log("ok — края и имена: покрытие, 500 имён, окончания, детерминизм, уникальность окончаний");
 
+// exercise the fallback path hard: more names than any one world will ever need
+{
+  const w3k = generateWorld(7);
+  const names3k = new Set();
+  for (let i = 0; i < 3000; i++) {
+    const r = i % w3k.cultures.length;
+    const n = w3k.namer.settlement(r);
+    assert.ok(n.length >= 4 && n.length <= 14, `длина fallback-имени ${n}`);
+    assert.ok(/^[А-ЯЁа-яё-]+$/.test(n), `fallback-имя только кириллица: ${n}`);
+    assert.ok(!names3k.has(n), `имя повторилось на шаге ${i}: ${n}`);
+    names3k.add(n);
+  }
+  assert.equal(names3k.size, 3000, "3000 имён без повторов");
+  console.log("ok — края и имена: 3000 уникальных кириллических имён");
+}
+
 // --- POI rendering ------------------------------------------------------------
 import { visiblePois, poiAt } from "../src/render.ts";
 

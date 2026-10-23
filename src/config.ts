@@ -66,11 +66,11 @@ export const CULTURES: CultureRegionTemplate[] = [
   { name: "южный", onset: ["м", "н", "ар", "са"], vowel: ["а", "и", "о"], coda: ["р", "н", "м"], endings: ["мар", "нат", "ри"], roots: ["Ам", "Сан", "Нат"], genitive: "и" },
 ];
 
-export const MAX_REGIONS = 7;        // больше краёв не нужно — сведём мелочь в соседей
-export const MIN_REGION_SHARE = 0.02; // край меньше 2% суши приклеивается к соседу
-export const NAME_MIN = 4;            // минимальная длина имени
-export const NAME_MAX = 14;           // максимальная длина имени
-export const NAME_TRIES = 50;         // попыток до систематического обхода
+export const MAX_REGIONS = 7;        // upper bound on the number of regions after merging
+export const MIN_REGION_SHARE = 0.02; // small regions get merged first while more than 3 regions remain
+export const NAME_MIN = 4;            // minimum settlement/state name length
+export const NAME_MAX = 14;           // maximum settlement/state name length
+export const NAME_TRIES = 50;         // random attempts before switching to the systematic fallback
 
 export const POI_COUNTS: Record<number, number> = {
   0: 6, // logging
