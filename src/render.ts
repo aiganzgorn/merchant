@@ -1,6 +1,6 @@
 // Terrain rendering: chunks are prerendered once and blitted with the camera.
-import { CHUNK, PRERENDER_TILE, BIOME_COLORS } from "./config.ts";
-import { BIOME, type World } from "./world.ts";
+import { CHUNK, PRERENDER_TILE, BIOME_COLORS, RIVER_WAVE, RIVER_WAVE_AMP } from "./config.ts";
+import type { World } from "./world.ts";
 import { CHUNKS_X, CHUNKS_Y, visibleChunks, worldToScreen, type Camera } from "./camera.ts";
 
 const RIVER_COLOR = "#2b6ea8";
@@ -36,8 +36,8 @@ export function paintChunk(world: World, cx: number, cy: number, ctx: CanvasRend
   for (let y = 0; y < CHUNK; y++) {
     for (let x = 0; x < CHUNK; x++) {
       const i = (y0 + y) * world.w + x0 + x;
-      const biome = world.river[i] ? BIOME.water : world.biome[i];
-      ctx.fillStyle = shade(biome, Math.floor(tileHash(x0 + x, y0 + y) * SHADES));
+      // river tiles keep their biome: the river itself is stroked on top, not painted as water
+      ctx.fillStyle = shade(world.biome[i], Math.floor(tileHash(x0 + x, y0 + y) * SHADES));
       ctx.fillRect(x * PRERENDER_TILE, y * PRERENDER_TILE, PRERENDER_TILE, PRERENDER_TILE);
     }
   }
@@ -60,37 +60,63 @@ export function prerender(world: World): HTMLCanvasElement[] {
 // Rivers are stroked in screen space, so they stay hair-thin when zoomed out and
 // become ribbons up close instead of a staircase of squares. Width follows catchment.
 function drawRivers(ctx: CanvasRenderingContext2D, world: World, cam: Camera, vw: number, vh: number): void {
-  const halfW = vw / 2 / cam.zoom, halfH = vh / 2 / cam.zoom;
-  const x0 = Math.max(0, Math.floor(cam.x - halfW) - 1);
-  const x1 = Math.min(world.w - 1, Math.ceil(cam.x + halfW) + 1);
-  const y0 = Math.max(0, Math.floor(cam.y - halfH) - 1);
-  const y1 = Math.min(world.h - 1, Math.ceil(cam.y + halfH) + 1);
-  if (x1 < x0 || y1 < y0) return;
-
-  const STEPS = 4;                       // four widths, so the whole net is a few strokes
-  const paths: Path2D[] = [];
-  for (let i = 0; i < STEPS; i++) paths.push(new Path2D());
-
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const i = y * world.w + x;
-      if (!world.river[i]) continue;
-      const next = world.flow[i];
-      if (next < 0) continue;
-      const a = worldToScreen(cam, vw, vh, x + 0.5, y + 0.5);
-      const b = worldToScreen(cam, vw, vh, (next % world.w) + 0.5, Math.floor(next / world.w) + 0.5);
-      const cls = Math.min(STEPS - 1, Math.floor(Math.log2(1 + world.streamSize[i] / 40)));
-      paths[cls].moveTo(a.x, a.y);
-      paths[cls].lineTo(b.x, b.y);
-    }
-  }
-
   ctx.strokeStyle = RIVER_COLOR;
   ctx.lineCap = "round";
-  for (let cls = 0; cls < STEPS; cls++) {
-    ctx.lineWidth = Math.min(16, Math.max(1.2, cam.zoom * (0.28 + 0.09 * cls)));
-    ctx.stroke(paths[cls]);
+  ctx.lineJoin = "round";
+  for (const chain of world.riverChains) {
+    const pts = chainPoints(world, cam, vw, vh, chain);
+    if (pts.length < 2) continue;
+    // width grows towards the mouth: stroke the chain in runs of one width class, each run
+    // ending on a shared point so the river never breaks into dashes
+    const cls = (k: number): number => widthClass(world.streamSize[chain[k]]);
+    let from = 0;
+    for (let k = 1; k <= chain.length; k++) {
+      if (k === chain.length || cls(k) !== cls(from)) {
+        strokeRun(ctx, pts, from, Math.min(k, pts.length - 1), cls(from), cam.zoom);
+        from = k;
+      }
+    }
   }
+}
+
+const STEPS = 4;                                 // four widths, so the whole net is a few strokes
+const widthClass = (streamSize: number): number =>
+  Math.min(STEPS - 1, Math.floor(Math.log2(1 + streamSize / 40)));
+
+// Tile centres of one river, nudged sideways by a slow wave. The wave is what keeps a river
+// from turning into a ruler-straight diagonal when the terrain under it happens to be flat.
+function chainPoints(
+  world: World, cam: Camera, vw: number, vh: number, chain: number[],
+): { x: number; y: number }[] {
+  const w = world.w;
+  const pts = chain.map((i) => worldToScreen(cam, vw, vh, (i % w) + 0.5, ((i / w) | 0) + 0.5));
+  const wavePx = RIVER_WAVE * cam.zoom;
+  const ampPx = RIVER_WAVE_AMP * cam.zoom;
+  let along = 0;
+  for (let k = 0; k < pts.length; k++) {
+    const a = pts[Math.max(0, k - 1)], c = pts[Math.min(pts.length - 1, k + 1)];
+    const dx = c.x - a.x, dy = c.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const off = Math.sin((along / wavePx) * Math.PI * 2) * ampPx;
+    pts[k] = { x: pts[k].x - (dy / len) * off, y: pts[k].y + (dx / len) * off };
+    if (k + 1 < pts.length) along += Math.hypot(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y);
+  }
+  return pts;
+}
+
+function strokeRun(
+  ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[],
+  from: number, to: number, cls: number, zoom: number,
+): void {
+  if (to <= from) return;
+  ctx.lineWidth = Math.min(16, Math.max(1.2, zoom * (0.28 + 0.09 * cls)));
+  ctx.beginPath();
+  ctx.moveTo(pts[from].x, pts[from].y);
+  for (let k = from + 1; k + 1 <= to; k++) {
+    ctx.quadraticCurveTo(pts[k].x, pts[k].y, (pts[k].x + pts[k + 1].x) / 2, (pts[k].y + pts[k + 1].y) / 2);
+  }
+  ctx.lineTo(pts[to].x, pts[to].y);
+  ctx.stroke();
 }
 
 export function draw(

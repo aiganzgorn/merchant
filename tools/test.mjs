@@ -35,10 +35,11 @@ const share = (v) => Array.from(seedA.biome).filter(x => x === v).length / seedA
 assert.ok(share(BIOME.water) > 0.15 && share(BIOME.water) < 0.38, `воды ${(share(BIOME.water) * 100).toFixed(0)}% — должно быть меньше трети`);
 
 
-// mountains must form chains, not blobs: a long thin component, not a round patch
+// mountains must form chains, not blobs — and a range must not wall a region off
 function largestComponent(biome, w, h, type) {
   const seen = new Uint8Array(w * h);
   let best = { size: 0, w: 0, h: 0 };
+  let count = 0, total = 0;
   for (let i = 0; i < w * h; i++) {
     if (seen[i] || biome[i] !== type) continue;
     const queue = [i];
@@ -57,18 +58,69 @@ function largestComponent(biome, w, h, type) {
         if (!seen[k] && biome[k] === type) { seen[k] = 1; queue.push(k); }
       }
     }
+    count++;
+    total += size;
     if (size > best.size) best = { size, w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
-  return best;
+  return { ...best, count, total };
 }
 
 const mountains = largestComponent(seedA.biome, MAP_W, MAP_H, BIOME.mountain);
 assert.ok(share(BIOME.mountain) > 0.015, `гор ${(share(BIOME.mountain) * 100).toFixed(1)}% — гор должно быть видно`);
+assert.ok(share(BIOME.mountain) < 0.06, `гор ${(share(BIOME.mountain) * 100).toFixed(1)}% — гор не должно быть слишком много`);
 assert.ok(mountains.size > 300, `крупнейшая горная гряда ${mountains.size} тайлов`);
-const span = Math.max(mountains.w, mountains.h);
-const fill = mountains.size / (mountains.w * mountains.h);
-assert.ok(span > 100, `гряда должна тянуться: ${mountains.w}×${mountains.h}`);
-assert.ok(fill < 0.5, `гряда должна быть вытянутой, а не пятном: заполнение ${fill.toFixed(2)}`);
+assert.ok(mountains.w * mountains.h > 0, "гряда занимает площадь");
+assert.ok(mountains.size / (mountains.w * mountains.h) < 0.5,
+  `гряда должна быть вытянутой, а не пятном: заполнение ${(mountains.size / (mountains.w * mountains.h)).toFixed(2)}`);
+// passes: the ranges are cut into separate pieces instead of one continuous wall
+assert.ok(mountains.count >= 12, `гряд ${mountains.count} — хребет должен прерываться на перевалы`);
+assert.ok(mountains.size < 0.45 * mountains.total,
+  `крупнейшая гряда ${(mountains.size / mountains.total * 100).toFixed(0)}% всех гор — хребет не должен быть сплошным`);
+
+// a person can walk from one end of the land to the other: mountains never cut it in two
+function largestWalkable(world) {
+  const w = world.w, h = world.h;
+  const seen = new Uint8Array(w * h);
+  const open = (i) => !world.water[i] && world.biome[i] !== BIOME.mountain;
+  let total = 0, best = 0;
+  for (let i = 0; i < w * h; i++) if (open(i)) total++;
+  for (let i = 0; i < w * h; i++) {
+    if (seen[i] || !open(i)) continue;
+    const queue = [i];
+    seen[i] = 1;
+    let size = 0;
+    while (queue.length) {
+      const j = queue.pop();
+      size++;
+      const x = j % w, y = (j / w) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (!seen[k] && open(k)) { seen[k] = 1; queue.push(k); }
+      }
+    }
+    if (size > best) best = size;
+  }
+  return { best, total };
+}
+const walk = largestWalkable(seedA);
+assert.ok(walk.best / walk.total > 0.97,
+  `пешком проходимо ${(walk.best / walk.total * 100).toFixed(1)}% суши — горы не должны разрезать мир на куски`);
+
+// the coastline wanders: not a rectangle with a frame of ocean
+{
+  const lefts = [];
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (seedA.biome[y * MAP_W + x] !== BIOME.water) { lefts.push(x); break; }
+    }
+  }
+  const mean = lefts.reduce((s, v) => s + v, 0) / lefts.length;
+  const sd = Math.sqrt(lefts.reduce((s, v) => s + (v - mean) ** 2, 0) / lefts.length);
+  assert.ok(sd > 8, `берег изрезан слабо: разброс ${sd.toFixed(1)} тайлов — мир выглядит квадратным`);
+}
+
 for (let i = 0; i < seedA.elev.length; i++) {
   const v = seedA.elev[i];
   assert.ok(Number.isFinite(v) && v >= 0 && v <= 1, `высота ${v} в 0..1`);
@@ -100,7 +152,7 @@ assert.equal(seedFromQuery("?seed=0"), 1, "ноль — запасной seed");
 console.log(`ok — рельеф: воды ${(share(BIOME.water) * 100).toFixed(0)}%, биомы все`);
 
 // --- rivers and lakes ---------------------------------------------------------
-import { RIVER_COUNT } from "../src/config.ts";
+import { RIVER_COUNT, LAKE_MAX_RISE } from "../src/config.ts";
 
 const rw = generateWorld(42);
 assert.ok(rw.rivers > 0, `проложено рек: ${rw.rivers}`);
@@ -116,11 +168,42 @@ for (let i = 0; i < rw.river.length; i++) {
     continue;
   }
   assert.ok(nx >= 0 && nx < rw.river.length, "сток внутри карты");
-  assert.ok(rw.water[nx] === 1 || rw.filled[nx] <= rw.filled[i] + 1e-6,
+  // 1e-5 covers float32 ties on a filled flat, where the flood level is equal by construction
+  assert.ok(rw.water[nx] === 1 || rw.filled[nx] <= rw.filled[i] + 1e-5,
     `река не течёт вверх (${rw.filled[i]} → ${rw.filled[nx]})`);
 }
 assert.ok(riverTiles > 100, `речных клеток ${riverTiles}`);
 assert.ok(riverTiles > 1000, `реки должны быть длинными: ${riverTiles} клеток на карту`);
+
+// rivers never jump: every step is one tile long and lands on river or water. A jump drew a
+// straight line across the map (the "strange rivers"), and a step onto dry land ended a river
+// in the middle of a field.
+{
+  let jumps = 0, dryEnds = 0;
+  for (let i = 0; i < rw.river.length; i++) {
+    if (!rw.river[i]) continue;
+    const nx = rw.flow[i];
+    if (nx < 0) { dryEnds++; continue; }
+    const step = Math.max(Math.abs((i % MAP_W) - (nx % MAP_W)),
+      Math.abs(((i / MAP_W) | 0) - ((nx / MAP_W) | 0)));
+    if (step > 1) jumps++;
+    if (!rw.river[nx] && !rw.water[nx]) dryEnds++;
+  }
+  assert.equal(jumps, 0, `река не должна прыгать через тайлы: ${jumps} прыжков`);
+  assert.equal(dryEnds, 0, `река не должна кончаться на суше: ${dryEnds} обрывов`);
+}
+
+// lakes stay in the lowlands — a filled pit high in the ridges would drown the passes
+{
+  const lakeTop = rw.waterLevel + LAKE_MAX_RISE * (1 - rw.waterLevel);
+  let highest = -1;
+  for (let i = 0; i < rw.water.length; i++) {
+    if (!rw.water[i] || rw.elev[i] <= rw.waterLevel) continue;   // sea, not a lake
+    if (rw.filled[i] > highest) highest = rw.filled[i];
+  }
+  assert.ok(highest <= lakeTop + 1e-6,
+    `озеро на высоте ${highest.toFixed(3)} — потолок ${lakeTop.toFixed(3)}`);
+}
 
 // rivers must not flood a region: no 32×32 window may be more than a quarter river
 {

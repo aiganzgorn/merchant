@@ -12,7 +12,8 @@ export type World = {
   flow: Int32Array;        // index of the next tile downstream, -1 = ends here
   streamSize: Int32Array;  // catchment behind each river tile — makes big rivers wide
   rivers: number;          // how many rivers were laid
-  riverLength: number;     // summed length of the rivers in tiles, jumps across flats included
+  riverLength: number;     // summed length of the rivers in tiles
+  riverChains: number[][]; // each river as an ordered list of tiles, source → mouth
   lakes: number;           // standing-water tiles beyond the ocean
   waterLevel: number;      // elevation below which a tile is sea
 };

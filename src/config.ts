@@ -13,6 +13,8 @@ export const ELEV_SCALE = 96;       // tiles across the first noise octave
 export const MOIST_SCALE = 64;
 export const OCTAVES = 5;
 export const EDGE_FALLOFF = 0.1;    // share of the map that sinks to ocean
+export const COAST_SCALE = 80;      // tiles across the noise that bends the shoreline
+export const COAST_WARP = 130;      // tiles the coastline wanders — bays and headlands
 export const LAND_SHARE = 0.78;     // how much of the map is dry land — ocean hugs the rim
 export const SAND_LEVEL = 0.03;     // band above water that is beach
 export const HILL_LEVEL = 0.42;     // foothills start here
@@ -28,12 +30,17 @@ export const PLATE_SEAM = 9;        // half-width of the uplift band, tiles
 export const PLATE_PEAKS = 18;      // scale of the noise that breaks a ridge into peaks
 export const PLATE_SCALE = 140;     // scale of the seam-warping noise
 export const RIDGE_HEIGHT = 0.72;    // how much of the elevation comes from uplift
+export const PLATE_PASS = 0.42;     // crest noise below this opens a pass through the range
+export const PLATE_PASS_WIDTH = 0.12; // how quickly the range falls away into a pass
 
 // rivers
 export const RIVER_COUNT = 24;        // how many rivers to try
 export const RIVER_MIN_CATCHMENT = 60; // land tiles a river must drain to be drawn
-export const RIVER_MAX_LEN = 400;     // tiles before we give up on one river
-export const LAKE_SHARE = 0.02;      // share of the land that pools into the deepest basins
+export const RIVER_MEANDER = 0.06;    // height wobble that makes a river wind instead of ruling
+                              // a straight diagonal across a smooth slope
+export const RIVER_MEANDER_SCALE = 12; // tiles across that wobble
+export const LAKE_SHARE = 0.012;     // share of the map that pools into the deepest basins
+export const LAKE_MAX_RISE = 0.35;   // lakes sit below this height above the sea, not on ridges
 export const LAKE_MIN_AREA = 16;     // smaller pools are wetlands, not lakes
 export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 
@@ -41,6 +48,8 @@ export const RIVER_MIN_LEN = 10;      // shorter than this is not worth counting
 export const ZOOM_MIN = 1.2;       // px per tile, farthest — the whole 512 map fits
 export const ZOOM_MAX = 48;      // px per tile, closest
 export const ZOOM_START = 20;
+export const RIVER_WAVE = 6;      // tiles per sideways wave of a drawn river
+export const RIVER_WAVE_AMP = 0.4; // tiles the wave swings — a river winds instead of ruling a line
 export const PRERENDER_TILE = 8; // px per tile in the prerendered chunks
 export const CHUNK = 32;         // tiles per chunk side
 

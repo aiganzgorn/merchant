@@ -4,8 +4,11 @@ import { BIOME, type World } from "./world.ts";
 import {
   MAP_W, MAP_H, ELEV_SCALE, MOIST_SCALE, OCTAVES, EDGE_FALLOFF, SAND_LEVEL,
   HILL_LEVEL, MOUNTAIN_LEVEL, FIELD_MOIST, FOREST_MOIST, LAND_SHARE,
+  COAST_SCALE, COAST_WARP,
   PLATE_GRID, PLATE_JITTER, PLATE_WARP, PLATE_SEAM, PLATE_SCALE, PLATE_PEAKS, RIDGE_HEIGHT,
-  RIVER_COUNT, RIVER_MIN_CATCHMENT, RIVER_MAX_LEN, LAKE_SHARE, LAKE_MIN_AREA, RIVER_MIN_LEN,
+  PLATE_PASS, PLATE_PASS_WIDTH,
+  RIVER_COUNT, RIVER_MIN_CATCHMENT, RIVER_MEANDER, RIVER_MEANDER_SCALE,
+  LAKE_SHARE, LAKE_MAX_RISE, LAKE_MIN_AREA, RIVER_MIN_LEN,
 } from "./config.ts";
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -78,8 +81,11 @@ export function generateWorld(seed: number): World {
       // distance to the nearest seam: zero on the border between two plates
       const gap = Math.sqrt(d2) - Math.sqrt(d1);
       const seam = Math.exp(-((gap / PLATE_SEAM) ** 2));
-      // saddles: where the peak noise dips, the ridge opens into a pass
-      const crest = 0.55 + 0.75 * fbm(seed + 5000, x, y, PLATE_PEAKS, 3);
+      // Saddles: where the crest noise dips the range is cut by a pass, so it never walls
+      // one region off from its neighbour. Away from the dip the ridge keeps its old height.
+      const peaks = fbm(seed + 5000, x, y, PLATE_PEAKS, 3);
+      const pass = smooth(Math.min(1, Math.max(0, (peaks - PLATE_PASS) / PLATE_PASS_WIDTH)));
+      const crest = (0.55 + 0.75 * peaks) * pass;
 
       const base = fbm(seed, x, y, ELEV_SCALE, OCTAVES);
       const lift = 0.35 + 0.65 * fbm(seed + 4000, x, y, ELEV_SCALE * 0.6, OCTAVES);
@@ -90,11 +96,16 @@ export function generateWorld(seed: number): World {
   normalize(elev);
   normalize(moist);
 
-  // The rim sinks into ocean, so the world has a coast and no wall.
+  // The rim sinks into ocean, so the world has a coast and no wall. The shoreline wanders
+  // with the noise, so the land is not a rectangle: bays, headlands and a ragged coast.
   const edge = EDGE_FALLOFF * Math.min(w, h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const d = (Math.min(x, y, w - 1 - x, h - 1 - y) - 1) / edge;
+      const raw = Math.min(x, y, w - 1 - x, h - 1 - y);
+      const wx = x + (fbm(seed + 6000, x, y, COAST_SCALE, 3) - 0.5) * COAST_WARP;
+      const wy = y + (fbm(seed + 7000, x, y, COAST_SCALE, 3) - 0.5) * COAST_WARP;
+      const moved = Math.min(wx, wy, w - 1 - wx, h - 1 - wy);
+      const d = raw <= 1 ? -1 : (moved - 1) / edge;   // the outer two rows always sink
       const f = Math.min(1, Math.max(0, d));
       elev[y * w + x] *= smooth(f) ** 2;
     }
@@ -122,8 +133,16 @@ export function generateWorld(seed: number): World {
     water[i] = b === BIOME.water ? 1 : 0;
   }
 
+  // Drainage runs on a slightly roughened copy of the height. On a perfectly smooth slope
+  // steepest descent picks the same diagonal every tile, and rivers come out ruler-straight.
+  const rain = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i % w, y = (i / w) | 0;
+    rain[i] = elev[i] + (fbm(seed + 8000, x, y, RIVER_MEANDER_SCALE, 2) - 0.5) * RIVER_MEANDER;
+  }
+
   // Drainage: fill every depression (priority flood) so all land drains to water.
-  const filled = Float32Array.from(elev);
+  const filled = Float32Array.from(rain);
   const dir = new Int32Array(n).fill(-1);
   const visited = new Uint8Array(n);
   const BUCKETS = 4096;
@@ -149,7 +168,7 @@ export function generateWorld(seed: number): World {
         const j = ny * w + nx;
         if (visited[j]) continue;
         visited[j] = 1;
-        filled[j] = Math.max(elev[j], filled[i]);   // a pit fills up to its outlet
+        filled[j] = Math.max(rain[j], filled[i]);   // a pit fills up to its outlet
         dir[j] = i;
         buckets[bucketOf(filled[j])].push(j);
       }
@@ -162,24 +181,25 @@ export function generateWorld(seed: number): World {
   const EPS = 1e-6;
   const depression = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    if (!water[i] && filled[i] - elev[i] > EPS) depression[i] = 1;
+    if (!water[i] && filled[i] - rain[i] > EPS) depression[i] = 1;
   }
 
   const seen = new Uint8Array(n);
   const stack: number[] = [];
-  const bodies: { tiles: number[]; depth: number }[] = [];
+  const bodies: { tiles: number[]; depth: number; spill: number }[] = [];
   for (let start = 0; start < n; start++) {
     if (!depression[start] || seen[start]) continue;
     stack.length = 0;
     stack.push(start);
     seen[start] = 1;
     const body: number[] = [];
-    let depth = 0;
+    let depth = 0, spill = 0;
     while (stack.length) {
       const j = stack.pop()!;
       body.push(j);
       const d = filled[j] - elev[j];
       if (d > depth) depth = d;
+      if (filled[j] > spill) spill = filled[j];
       const x = j % w, y = (j / w) | 0;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -191,16 +211,19 @@ export function generateWorld(seed: number): World {
         }
       }
     }
-    if (body.length >= LAKE_MIN_AREA) bodies.push({ tiles: body, depth });
+    if (body.length >= LAKE_MIN_AREA) bodies.push({ tiles: body, depth, spill });
   }
 
-  let land = 0;
-  for (let i = 0; i < n; i++) if (!water[i]) land++;
   bodies.sort((a, b) => b.depth - a.depth || a.tiles[0] - b.tiles[0]);
 
+  // Lakes live in lowlands: a basin whose spill point sits high in the ridges stays dry,
+  // otherwise the mountains end up holding a sea and the passes drown.
+  const lakeTop = waterLevel + LAKE_MAX_RISE * (1 - waterLevel);
   let lakes = 0;
   const lakeBudget = Math.floor(n * LAKE_SHARE);
   for (const body of bodies) {
+    if (body.spill > lakeTop) continue;
+    if (body.tiles.length > lakeBudget - lakes) continue;   // one lake never eats the whole budget
     if (lakes >= lakeBudget) break;
     for (const j of body.tiles) { water[j] = 1; biome[j] = BIOME.water; }
     lakes += body.tiles.length;
@@ -255,7 +278,9 @@ export function generateWorld(seed: number): World {
   // hollows are crossed in a straight line from inlet to spill point — following the
   // drainage tree there would snake back and forth and fill a whole district with river.
   const basinId = new Int32Array(n).fill(-1);
-  const basinExit: number[] = [];
+  let basins = 0;
+  // distance inside a basin to its spill point, so a river crosses a flat tile by tile
+  const spillDist = new Int32Array(n).fill(-1);
   {
     const mark = new Int32Array(n);
     let token = 0;
@@ -296,9 +321,29 @@ export function generateWorld(seed: number): World {
       }
       if (exitTile < 0) continue;
 
-      const id = basinExit.length;
-      basinExit.push(exitTile);
+      const id = basins++;
       for (const j of body) basinId[j] = id;
+
+      // Breadth-first from the spill point: every basin tile now knows how many steps
+      // separate it from the way out, which is the path a river takes across the flat.
+      spillDist[exitTile] = 0;
+      body.length = 0;
+      body.push(exitTile);
+      for (let q = 0; q < body.length; q++) {
+        const j = body[q], dj = spillDist[j];
+        const x = j % w, y = (j / w) | 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const k = ny * w + nx;
+            if (basinId[k] !== id || spillDist[k] >= 0) continue;
+            spillDist[k] = dj + 1;
+            body.push(k);
+          }
+        }
+      }
     }
   }
 
@@ -307,12 +352,6 @@ export function generateWorld(seed: number): World {
   const streamSize = new Int32Array(n);
   let rivers = 0;
   let riverLength = 0;
-
-  const span = (a: number, b: number): number => {
-    const dx = Math.abs((a % w) - (b % w));
-    const dy = Math.abs(((a / w) | 0) - ((b / w) | 0));
-    return Math.max(dx, dy);
-  };
 
   for (const outlet of outlets.slice(0, RIVER_COUNT)) {
     let src = outlet;
@@ -327,21 +366,58 @@ export function generateWorld(seed: number): World {
 
     let cur = src;
     let len = 0;
-    while (len < RIVER_MAX_LEN && !water[cur]) {
+    while (!water[cur]) {
+      // On a slope the river follows the drainage tree; across a flat basin it follows the
+      // spill gradient. Either way it steps one tile at a time and always reaches water.
+      let next = dir[cur];
       const b = basinId[cur];
-      let next = b >= 0 ? basinExit[b] : dir[cur];
-      if (next === cur) next = dir[cur];    // already at the spill point: just flow out
+      if (b >= 0) {
+        let bestD = spillDist[cur];
+        const x = cur % w, y = (cur / w) | 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const k = ny * w + nx;
+            if (basinId[k] === b && spillDist[k] >= 0 && spillDist[k] < bestD) {
+              bestD = spillDist[k];
+              next = k;
+            }
+          }
+        }
+      }
       if (next < 0 || next === cur) break;
       river[cur] = 1;
       streamSize[cur] = catchment[cur];
       flow[cur] = next;
-      len += Math.max(1, span(cur, next));
+      len++;
       cur = next;
     }
     if (len > RIVER_MIN_LEN) { rivers++; riverLength += len; }
   }
 
-  return { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel };
+  // Rivers as ordered chains (source → mouth), so the renderer strokes one line per river
+  // instead of a pile of loose segments and can let it wind.
+  const riverChains: number[][] = [];
+  {
+    const incoming = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (river[i] && flow[i] >= 0) incoming[flow[i]] = 1;
+    for (let i = 0; i < n; i++) {
+      if (!river[i] || incoming[i]) continue;
+      const chain: number[] = [];
+      let cur = i;
+      while (cur >= 0 && river[cur]) {
+        chain.push(cur);
+        const next = flow[cur];
+        if (next >= 0 && !river[next]) { chain.push(next); break; }   // the last step reaches water
+        cur = next;
+      }
+      if (chain.length > 1) riverChains.push(chain);
+    }
+  }
+
+  return { seed, w, h, elev, filled, moist, biome, water, river, flow, streamSize, rivers, riverLength, lakes, waterLevel, riverChains };
 }
 
 // ?seed=42 → 42; missing, zero, negative or garbage → 1, so the map always builds.
