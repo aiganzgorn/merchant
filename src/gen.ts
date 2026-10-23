@@ -10,7 +10,7 @@ import {
   PLATE_PASS, PLATE_PASS_WIDTH,
   RIVER_COUNT, RIVER_MIN_CATCHMENT, RIVER_MEANDER, RIVER_MEANDER_SCALE,
   LAKE_SHARE, LAKE_MAX_RISE, LAKE_MIN_AREA, RIVER_MIN_LEN,
-  POI_COUNTS, POI_MIN_GAP, POI_BIOMES, SETTLEMENT_COUNT, SETTLEMENT_REACH,
+  POI_COUNTS, POI_MIN_GAP, POI_BIOMES, SETTLEMENT_COUNT, SETTLEMENT_MIN_GAP,
   START_POP_MIN, START_POP_MAX, WATER_REACH, POI_OWN_RANGE, RESOURCE_COUNT,
   HOUSES_PER_POP,
 } from "./config.ts";
@@ -136,51 +136,32 @@ function placePoi(rng: Rng, seed: number, biome: Uint8Array, water: Uint8Array, 
   }
 
   const settlements: Settlement[] = [];
-  const occupied = new Uint8Array(n);
-  // Anchor towns near any known POI so the map is covered evenly for production.
-  let anchors = poi.filter(p => p.known);
-  const covered = new Uint8Array(poi.length);
-  while (settlements.length < SETTLEMENT_COUNT && anchors.length > 0) {
-    const ai = int(rng, anchors.length);
-    const base = anchors[ai];
-    const options: { x: number; y: number }[] = [];
-    for (let dy = -SETTLEMENT_REACH; dy <= SETTLEMENT_REACH; dy++) {
-      for (let dx = -SETTLEMENT_REACH; dx <= SETTLEMENT_REACH; dx++) {
-        const nx = base.x + dx, ny = base.y + dy;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const j = ny * w + nx;
-        const b = biome[j];
-        if (b === BIOME.water || b === BIOME.hill || b === BIOME.mountain) continue;
-        if (river[j] || occupied[j] || poiTile[j]) continue;
-        if (!waterReach[j]) continue;
-        options.push({ x: nx, y: ny });
-      }
+
+  // Candidate tiles: flat dry land within water reach, clear of POIs. Towns are
+  // scattered over the whole land, not anchored to fishing or logging POIs.
+  const candidates: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const b = biome[i];
+    if (b === BIOME.water || b === BIOME.hill || b === BIOME.mountain) continue;
+    if (river[i] || poiTile[i] || !waterReach[i]) continue;
+    candidates.push(i);
+  }
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = int(rng, i + 1);
+    const tmp = candidates[i];
+    candidates[i] = candidates[j];
+    candidates[j] = tmp;
+  }
+
+  for (const i of candidates) {
+    if (settlements.length >= SETTLEMENT_COUNT) break;
+    const x = i % w, y = (i / w) | 0;
+    let tooClose = false;
+    for (const s of settlements) {
+      if (Math.max(Math.abs(s.x - x), Math.abs(s.y - y)) < SETTLEMENT_MIN_GAP) { tooClose = true; break; }
     }
-    if (options.length === 0) {
-      anchors.splice(ai, 1);
-      continue;
-    }
-    // Prefer tiles that bring the most not-yet-covered POIs into ownership range.
-    let bestScore = -1;
-    const best: { x: number; y: number }[] = [];
-    for (const o of options) {
-      let score = 0;
-      for (let pi = 0; pi < poi.length; pi++) {
-        if (covered[pi]) continue;
-        const p = poi[pi];
-        if (Math.hypot(o.x - p.x, o.y - p.y) <= POI_OWN_RANGE) score++;
-      }
-      if (score > bestScore) { bestScore = score; best.length = 0; best.push(o); }
-      else if (score === bestScore) best.push(o);
-    }
-    const choice = best[int(rng, best.length)];
-    occupied[choice.y * w + choice.x] = 1;
-    settlements.push(choice as Settlement);
-    anchors.splice(ai, 1); // one town per anchor to spread towns evenly
-    for (let pi = 0; pi < poi.length; pi++) {
-      const p = poi[pi];
-      if (Math.hypot(choice.x - p.x, choice.y - p.y) <= POI_OWN_RANGE) covered[pi] = 1;
-    }
+    if (tooClose) continue;
+    settlements.push({ x, y } as Settlement);
   }
 
   return { poi, settlements };

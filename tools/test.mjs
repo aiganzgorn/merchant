@@ -23,7 +23,7 @@ console.log("ok — rng: детерминизм и диапазон");
 // --- terrain, moisture, biomes -----------------------------------------------
 import { generateWorld, seedFromQuery } from "../src/gen.ts";
 import { BIOME, idx, POI, RESOURCE } from "../src/world.ts";
-import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_REACH, SETTLEMENT_COUNT, POI_OWN_RANGE } from "../src/config.ts";
+import { MAP_W, MAP_H, POI_COUNTS, POI_MIN_GAP, SETTLEMENT_COUNT, POI_OWN_RANGE } from "../src/config.ts";
 
 const test = (name, fn) => fn();
 
@@ -376,7 +376,7 @@ test("точки: биом, запасы, скрытая руда, поселе�
     if (a === b || a.kind !== b.kind) continue;
     assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) >= POI_MIN_GAP, "две точки одного вида слишком близко");
   }
-  // settlements stand on dry flat land near a known POI
+  // settlements stand on dry flat land
   assert.ok(w.settlements.length >= 12, `поселений ${w.settlements.length}`);
   const settlementTiles = new Set();
   for (const s of w.settlements) {
@@ -387,8 +387,6 @@ test("точки: биом, запасы, скрытая руда, поселе�
     assert.ok(!settlementTiles.has(`${s.x},${s.y}`), "два поселения на одном тайле");
     settlementTiles.add(`${s.x},${s.y}`);
     assert.ok(!w.poi.some((p) => p.x === s.x && p.y === s.y), "поселение на точке интереса");
-    assert.ok(w.poi.some((p) => p.known
-      && Math.max(Math.abs(p.x - s.x), Math.abs(p.y - s.y)) <= SETTLEMENT_REACH), "поселение без точки рядом");
   }
   // no POI sits on the same tile as its nearest settlement
   for (const p of w.poi) {
@@ -427,7 +425,7 @@ console.log("ok — точки интереса и поселения: биом�
 
 // --- settlements as objects ---------------------------------------------------
 const ws = generateWorld(42);
-assert.ok(ws.settlements.length >= 12 && ws.settlements.length <= SETTLEMENT_COUNT, `поселений ${ws.settlements.length}`);
+assert.equal(ws.settlements.length, SETTLEMENT_COUNT, `поселений ${ws.settlements.length}`);
 for (const s of ws.settlements) {
   assert.ok(s.name.length >= 4, "у поселения есть имя");
   assert.ok(s.population >= 20 && s.population <= 60, `стартовое население ${s.population}`);
