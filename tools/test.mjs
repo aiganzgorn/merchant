@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 // --- rng ---------------------------------------------------------------------
 import { mulberry32, int } from "../src/rng.ts";
+import { marketPrices, priceOf } from "../src/market.ts";
+import { PRICE_BASE, PRICE_LOW, PRICE_HIGH } from "../src/config.ts";
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -977,6 +979,33 @@ console.log(`ok — подписи поселений: в кадре, без н�
   const slavic = all.filter((n) => /(ово|ино|ец|град|поль|ичи)$/.test(n));
   assert.ok(slavic.length >= 5, `славянских имён ${slavic.length}, ждём ≥5`);
   console.log(`ok — крупные края и имена: ${sample.slice(0, 6).join(", ")}`);
+
+// --- рынок ----------------------------------------------------------------------
+
+{
+  const town = { population: 100, stock: new Float32Array(10), water: true, level: 0, buildings: { houses: 2, admin: 0, industry: 0, trade: 0 }, pois: [] };
+  const empty = priceOf(town, RESOURCE.grain);
+  assert.equal(empty, Math.round(PRICE_BASE[RESOURCE.grain] * PRICE_HIGH), "пустой склад просит верхнюю цену");
+
+  const full = { ...town, stock: new Float32Array(10) };
+  full.stock[RESOURCE.grain] = 100 * 0.02 * 30 * 3; // three times the base coverage
+  assert.equal(priceOf(full, RESOURCE.grain), Math.round(PRICE_BASE[RESOURCE.grain] * PRICE_LOW), "завал даёт нижнюю цену");
+  assert.ok(priceOf(full, RESOURCE.grain) < empty, "с запасом дешевле, чем на пустом складе");
+
+  const base = { ...town, stock: new Float32Array(10) };
+  base.stock[RESOURCE.grain] = 100 * 0.02 * 30;
+  assert.equal(priceOf(base, RESOURCE.grain), PRICE_BASE[RESOURCE.grain], "запас на 30 дней — базовая цена");
+
+  assert.equal(priceOf(town, RESOURCE.fur), PRICE_BASE[RESOURCE.fur], "товар вне потребностей стоит базово");
+  assert.ok(priceOf(town, RESOURCE.silver) > priceOf(town, RESOURCE.grain), "серебро дороже зерна");
+
+  const rows = marketPrices(town);
+  assert.equal(rows.length, 10, "на рынке все десять товаров");
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i].price >= rows[i - 1].price, "рынок отсортирован по цене");
+  assert.deepEqual(marketPrices(town), rows, "цены детерминированы");
+  console.log(`ok — рынок: 10 товаров, цена ${empty} за пустое зерно против ${priceOf(base, RESOURCE.grain)} за запас на месяц`);
+}
+
 }
 
 // --- планировка города и дороги -------------------------------------------------

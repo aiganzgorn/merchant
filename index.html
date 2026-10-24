@@ -44,6 +44,8 @@
       #deals { flex: 1 1 42%; }
       .head { color: #ffd76e; font-size: 14px; margin-bottom: 6px; }
       .row { color: #8f9ac4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* the price list is long: wrap it instead of clipping, two lines fit the strip */
+      .row.market { white-space: normal; line-height: 1.45; }
       .row b { color: #cdd6ff; font-weight: 600; }
       .note { color: #59618a; margin-top: auto; }
       #start {

@@ -5,6 +5,7 @@ import type { Sim } from "./sim.ts";
 import { settlementCard } from "./settlements.ts";
 import { roadsOf } from "./roads.ts";
 import { FEED_MAX, LEVEL_NAMES, RESOURCE_NAMES } from "./config.ts";
+import { marketPrices } from "./market.ts";
 
 function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10, m100 = n % 100;
@@ -23,7 +24,7 @@ export function townSubline(s: Settlement): string {
 
 const DEFAULT_DEALS_HTML =
   `<div class="row"><b>капитал</b> 12 480</div>` +
-  `<div class="note">сделки, предприятия и рынок — позже</div>`;
+  `<div class="note">сделки и предприятия — позже</div>`;
 
 export function clockText(sim: Sim): string {
   return `день ${sim.day} · ${sim.speed === 0 ? "‖" : `×${sim.speed}`}`;
@@ -68,7 +69,8 @@ export function settlementCardHtml(world: World, s: Settlement): string {
     `<div class="row">население ${Math.round(s.population)} · домов ${s.buildings.houses}</div>` +
     `<div class="row">угодья: ${ownedResources(world, s) || "нет"}</div>` +
     (links ? `<div class="row">дороги: ${links}</div>` : "") +
-    needs
+    needs +
+    `<div class="row market">рынок: ${marketPrices(s).map((p) => `${RESOURCE_NAMES[p.resource]}\u00a0${p.price}`).join(" · ")}</div>`
   );
 }
 

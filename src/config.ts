@@ -168,6 +168,12 @@ export const ROAD_REUSE_COST = 0.45;  // a tile another road already crosses is 
 export const ROAD_COLOR = "#8a6a44";
 export const ROAD_THIN_ZOOM = 12;      // px per tile above which a road is drawn wider
 
+// market: base price per resource (RESOURCE order: wood, fur, fish, salt, grain, livestock, stone, copper, iron, silver)
+export const PRICE_BASE = [4, 9, 3, 12, 2, 7, 5, 18, 26, 60];
+export const PRICE_DAYS = 30;   // this many days of stock for a town is priced at the base rate
+export const PRICE_LOW = 0.85;  // a glut never takes a good below this share of its base price
+export const PRICE_HIGH = 1.6;  // an empty store never asks more than this share
+
 // world time
 export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world
 export const ZOOM_PICK = 6;           // zoom when the player picks a town from the start list
