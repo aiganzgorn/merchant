@@ -6,8 +6,11 @@ import { mapViewport, clampCamera, screenToWorld, zoomAt, wheelFactor, type Came
 import { poiCard, isClick, declPoints, declTiles } from "./poi-card.ts";
 import { advance, type Sim, type Speed } from "./sim.ts";
 import { stepDay } from "./settlements.ts";
-import { clockText, pushEvent, startListHtml, showSettlement } from "./ui.ts";
-import type { Poi } from "./world.ts";
+import { clockText, pushEvent, startListHtml, showSettlement, cargoLine } from "./ui.ts";
+import {
+  newPlayer, buy, sell, sellAll, startTravel, tickTravel, canTrade, cargoUnits,
+} from "./player.ts";
+import type { Poi, Settlement } from "./world.ts";
 
 const canvas = document.getElementById("map") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -24,8 +27,13 @@ const chunks = prerender(world);
 
 $("seed").textContent = `seed ${seed}`;
 
+// The merchant stands in the first town until the player picks one on the start screen.
+const player = newPlayer(0);
+let shown: Settlement | null = null;
+const refresh = (): void => showSettlement(world, shown, player);
+
 // The base "мои дела" card lives in src/ui.ts, so a click on empty map restores it.
-showSettlement(world, null);
+refresh();
 
 // ?zoom=8 opens the world at a given scale — handy for looking at the whole map.
 const zoomParam = Number(new URLSearchParams(location.search).get("zoom"));
@@ -122,7 +130,8 @@ canvas.addEventListener("pointerup", (e) => {
   if (wasClick) {
     const town = settlementAt(world, cam, view.w, view.h, e.clientX, e.clientY);
     if (town) {
-      showSettlement(world, town);
+      shown = town;
+      refresh();
       return;
     }
     const p = poiAt(world, cam, view.w, view.h, e.clientX, e.clientY);
@@ -135,9 +144,11 @@ canvas.addEventListener("pointerleave", () => { cursorEl.textContent = "тайл
 
 function showCard(poi: Poi | null): void {
   if (!poi) {
-    showSettlement(world, null);
+    shown = null;
+    refresh();
     return;
   }
+  shown = null;
   const body = $("deals-body");
   const info = poiCard(world, poi);
   const yieldPct = Math.round(info.yield * 100);
@@ -148,6 +159,38 @@ function showCard(poi: Poi | null): void {
     <div class="row">ближайшее поселение · ${dist}</div>
     <div class="row">этого вида в зоне: ${info.sameKindInZone} ${declPoints(info.sameKindInZone)} (считая эту)</div>
   `;
+}
+
+// --- trade clicks -------------------------------------------------------------
+$("deals-body").addEventListener("click", (e) => {
+  const target = e.target as HTMLElement;
+  const buyBtn = target.closest<HTMLButtonElement>(".buy");
+  if (buyBtn) {
+    const got = buy(player, world, Number(buyBtn.dataset.r), 1);
+    if (got === 0 && canTrade(player)) pushEvent(`денег не хватает на ${buyBtn.textContent?.trim()}`);
+    refresh();
+    return;
+  }
+  const sellAllBtn = target.closest<HTMLButtonElement>(".sell-all");
+  if (sellAllBtn) {
+    const earned = Math.round(sellAll(player, world));
+    const town = world.settlements[player.at];
+    pushEvent(earned > 0 ? `продал груз в ${town.name} за ${earned}` : `нечего продавать в ${town.name}`);
+    refresh();
+    return;
+  }
+  const goBtn = target.closest<HTMLButtonElement>(".go");
+  if (goBtn) {
+    const to = Number(goBtn.dataset.to);
+    if (startTravel(player, world, to)) {
+      pushEvent(`караван вышел в ${world.settlements[to].name} · ${travelLeft(player)}`);
+      refresh();
+    }
+  }
+});
+
+function travelLeft(p: typeof player): string {
+  return p.journey ? `${p.journey.left} дн` : "";
 }
 
 addEventListener("resize", resize);
@@ -179,6 +222,10 @@ $("start-list").addEventListener("click", (e) => {
   cam = clampCamera({ x: Number(btn.dataset.x), y: Number(btn.dataset.y), zoom: ZOOM_PICK }, view.w, view.h);
   $("zoom").textContent = `zoom ${cam.zoom.toFixed(1)}`;
   startEl.hidden = true;
+  // the picked town may sit off-centre after clamping, so match it by its tile
+  const px = Number(btn.dataset.x), py = Number(btn.dataset.y);
+  const here = world.settlements.findIndex((st) => st.x === px && st.y === py);
+  if (here >= 0) { player.at = here; refresh(); }
   draw(ctx, world, chunks, cam, view.w, view.h, zones);
 });
 
@@ -199,9 +246,12 @@ function tick(now: number): void {
   sim.acc = next.acc;
   if (days > 0) {
     for (let d = 0; d < days; d++) {
+      const arrived = tickTravel(player);
+      if (arrived >= 0) pushEvent(`караван прибыл в ${world.settlements[arrived].name}`);
       for (const text of stepDay(world)) pushEvent(`день ${firstDay + d} · ${text}`);
     }
     showClock();
+    refresh();
     draw(ctx, world, chunks, cam, view.w, view.h, zones);
   }
   requestAnimationFrame(tick);

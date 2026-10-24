@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 // --- rng ---------------------------------------------------------------------
 import { mulberry32, int } from "../src/rng.ts";
 import { marketPrices, priceOf } from "../src/market.ts";
+import { newPlayer, buy, sell, sellAll, canTrade, canTravel, startTravel, tickTravel, buyPrice, sellPrice, cargoUnits } from "../src/player.ts";
+import { START_CAPITAL } from "../src/config.ts";
 import { PRICE_BASE, PRICE_LOW, PRICE_HIGH } from "../src/config.ts";
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
@@ -898,8 +900,14 @@ import { settlementAt } from "../src/render.ts";
 
 const cardWorld = generateWorld(42);
 const cardTown = cardWorld.settlements[0];
-const cardHtml = settlementCardHtml(cardWorld, cardTown);
+const cardPlayer = newPlayer(cardWorld.settlements.indexOf(cardTown));
+const cardHtml = settlementCardHtml(cardWorld, cardTown, cardPlayer);
 assert.ok(cardHtml.includes(cardTown.name), "в карточке имя");
+assert.ok(cardHtml.includes("рынок"), "в карточке рынок");
+assert.ok(cardHtml.includes('class="buy"'), "в своём городе цена — кнопка покупки");
+assert.ok(cardHtml.includes("продать всё"), "в своём городе можно продать груз");
+const awayHtml = settlementCardHtml(cardWorld, cardWorld.settlements[5], cardPlayer);
+assert.ok(!awayHtml.includes('class="buy"'), "в чужом городе цены только для чтения");
 assert.ok(cardHtml.includes("хутор"), "в карточке ступень");
 assert.ok(cardHtml.includes("население"), "в карточке население");
 assert.ok(cardHtml.includes("еда"), "в карточке потребности");
@@ -1004,6 +1012,56 @@ console.log(`ok — подписи поселений: в кадре, без н�
   for (let i = 1; i < rows.length; i++) assert.ok(rows[i].price >= rows[i - 1].price, "рынок отсортирован по цене");
   assert.deepEqual(marketPrices(town), rows, "цены детерминированы");
   console.log(`ok — рынок: 10 товаров, цена ${empty} за пустое зерно против ${priceOf(base, RESOURCE.grain)} за запас на месяц`);
+}
+
+// --- торговля -------------------------------------------------------------------
+{
+  const w = generateWorld(42);
+  const p = newPlayer(0);
+  assert.equal(p.capital, START_CAPITAL, "стартовый капитал");
+  assert.equal(cargoUnits(p), 0, "на старте груза нет");
+  assert.ok(canTrade(p), "на старте можно торговать");
+
+  const grain = RESOURCE.grain;
+  const buyAt = buyPrice(w, p, grain);
+  assert.ok(buyAt >= 1, "цена покупки положительная");
+  assert.ok(sellPrice(w, p, grain) < buyAt, "город покупает дешевле, чем продаёт");
+
+  const before = p.capital;
+  assert.equal(buy(p, w, grain, 1), 1, "купил единицу");
+  assert.equal(p.capital, before - buyAt, "капитал уменьшился на цену");
+  assert.equal(cargoUnits(p), 1, "единица легла в груз");
+
+  const earned = sell(p, w, grain, 1);
+  assert.equal(earned, 1, "продал единицу");
+  assert.equal(cargoUnits(p), 0, "груз опустел");
+  assert.ok(p.capital < before, "купил и продал в том же городе — потерял на спреде");
+
+  p.capital = 0;
+  assert.equal(buy(p, w, grain, 1), 0, "без денег не купить");
+  p.capital = START_CAPITAL;
+
+  // a road neighbour is a real journey: days pass, then the merchant stands there
+  const to = w.roads.find((r) => r.a === 0 || r.b === 0);
+  const dest = to.a === 0 ? to.b : to.a;
+  assert.ok(canTravel(w, p, dest), "до соседа есть дорога");
+  assert.equal(startTravel(p, w, dest), true, "караван вышел");
+  assert.ok(!canTrade(p), "в пути торговать нельзя");
+  assert.equal(buy(p, w, grain, 1), 0, "в пути покупка не проходит");
+
+  for (let d = 1; d < to.days; d++) assert.equal(tickTravel(p), -1, `день ${d}: ещё в пути`);
+  assert.equal(tickTravel(p), dest, "на последнем дне пришёл");
+  assert.equal(p.at, dest, "стою в городе назначения");
+  assert.ok(canTrade(p), "снова можно торговать");
+
+  // a town with no road is out of reach, and you cannot walk to where you already are
+  assert.ok(!canTravel(w, p, dest), "в город, где стою, не иду");
+  p.cargo[grain] = 3;
+  const purse = p.capital;
+  assert.ok(sellAll(p, w) > 0, "продажа всего считается");
+  assert.ok(p.capital > purse, "продажа груза принесла деньги");
+  assert.equal(cargoUnits(p), 0, "после продажи всего груз пуст");
+  console.log(`ok — торговля: цена ${buyAt}, спред ${buyAt - sellPrice(w, p, grain)}, дорога ${to.days} дн, продажа груза`);
 }
 
 }

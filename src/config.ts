@@ -5,7 +5,7 @@ export const MAP_W = 512;        // tiles across
 export const MAP_H = 512;        // tiles down
 
 // layout (C: map above, strip below)
-export const STRIP_H = 220;      // bottom strip height, px
+export const STRIP_H = 248;      // bottom strip height, px — room for a full town card with its market
 export const MAP_MIN_H = 120;    // the map never shrinks below this, px
 
 // terrain
@@ -173,6 +173,10 @@ export const PRICE_BASE = [4, 9, 3, 12, 2, 7, 5, 18, 26, 60];
 export const PRICE_DAYS = 30;   // this many days of stock for a town is priced at the base rate
 export const PRICE_LOW = 0.85;  // a glut never takes a good below this share of its base price
 export const PRICE_HIGH = 1.6;  // an empty store never asks more than this share
+
+// the merchant
+export const START_CAPITAL = 12480;
+export const TRADE_SPREAD = 0.9;   // a town buys a good for this share of what it sells it for
 
 // world time
 export const MAX_FRAME_SECONDS = 0.25; // a frame longer than this (tab was hidden) does not fast-forward the world

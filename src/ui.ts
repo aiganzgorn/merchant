@@ -6,6 +6,9 @@ import { settlementCard } from "./settlements.ts";
 import { roadsOf } from "./roads.ts";
 import { FEED_MAX, LEVEL_NAMES, RESOURCE_NAMES } from "./config.ts";
 import { marketPrices } from "./market.ts";
+import {
+  type Player, sellPrice, cargoUnits, canTrade, canTravel,
+} from "./player.ts";
 
 function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10, m100 = n % 100;
@@ -22,9 +25,34 @@ export function townSubline(s: Settlement): string {
   return `${people} ${plural(people, "душа", "души", "душ")} · ${houses} ${plural(houses, "дом", "дома", "домов")} · ${firms} предпр.`;
 }
 
-const DEFAULT_DEALS_HTML =
-  `<div class="row"><b>капитал</b> 12 480</div>` +
-  `<div class="note">сделки и предприятия — позже</div>`;
+const money = (n: number): string => Math.round(n).toLocaleString("ru-RU");
+
+export function cargoLine(p: Player): string {
+  const parts: string[] = [];
+  for (let r = 0; r < p.cargo.length; r++) {
+    if (p.cargo[r] >= 1) parts.push(`${RESOURCE_NAMES[r]}\u00a0${Math.round(p.cargo[r])}`);
+  }
+  return parts.length ? parts.join(" · ") : "пусто";
+}
+
+// What the merchant has and where he stands, shown when no town is selected.
+export function playerPanelHtml(world: World, p: Player): string {
+  const here = world.settlements[p.at];
+  if (p.journey) {
+    const to = world.settlements[p.journey.to];
+    return (
+      `<div class="row"><b>в пути</b> · до ${to.name}, ${p.journey.left} дн</div>` +
+      `<div class="row">капитал ${money(p.capital)}</div>` +
+      `<div class="row">груз: ${cargoLine(p)}</div>`
+    );
+  }
+  return (
+    `<div class="row"><b>капитал</b> ${money(p.capital)}</div>` +
+    `<div class="row">стою в ${here.name} · ${LEVEL_NAMES[here.level]}</div>` +
+    `<div class="row">груз (${cargoUnits(p)}): ${cargoLine(p)}</div>` +
+    `<div class="note">клик по городу — рынок и дороги</div>`
+  );
+}
 
 export function clockText(sim: Sim): string {
   return `день ${sim.day} · ${sim.speed === 0 ? "‖" : `×${sim.speed}`}`;
@@ -51,33 +79,59 @@ export function startListHtml(world: World): string {
     .join("");
 }
 
-export function settlementCardHtml(world: World, s: Settlement): string {
+export function settlementCardHtml(world: World, s: Settlement, p: Player): string {
   const card = settlementCard(s);
+  const index = world.settlements.indexOf(s);
+  const here = p.at === index && canTrade(p);
+  // One wrapping line instead of one row per need: the card has to fit the strip.
   const needs = card.needs
     .map((n) => {
       const mark = n.ok ? "✓" : "×";
       const amount = n.water ? (n.ok ? "есть" : "нет") : `${Math.floor(n.have)}/${Math.ceil(n.need)}`;
-      return `<div class="row">${mark} ${n.label} · ${amount}</div>`;
+      return `${mark} ${n.label}\u00a0${amount}`;
     })
-    .join("");
-  const links = roadsOf(world, world.settlements.indexOf(s))
-    .slice(0, 3)
-    .map((l) => `${l.other.name} ${l.days} дн`)
     .join(" · ");
+  // Roads are buttons: a click walks the merchant there, one day per road day.
+  const links = roadsOf(world, index)
+    .map((l) => {
+      const to = world.settlements.indexOf(l.other);
+      const live = canTravel(world, p, to);
+      return `<button class="go" type="button" data-to="${to}"${live ? "" : " disabled"}>${l.other.name} ${l.days}\u00a0дн</button>`;
+    })
+    .join(" ");
+
+  // Market: at the town you stand in, every price is a buy button; elsewhere it is just a price.
+  const market = marketPrices(s)
+    .map((row) => {
+      const name = RESOURCE_NAMES[row.resource];
+      if (!here) return `${name}\u00a0${row.price}`;
+      const sell = sellPrice(world, p, row.resource);
+      return `<button class="buy" type="button" data-r="${row.resource}" title="купить за ${row.price}, продать за ${sell}">` +
+        `${name}\u00a0${row.price}</button>`;
+    })
+    .join(" ");
+
+  const trip = p.journey
+    ? `<div class="row"><b>в пути</b> · ${world.settlements[p.journey.to].name}, ${p.journey.left} дн</div>`
+    : "";
+
   return (
     `<div class="row"><b>${s.name}</b> · ${card.levelName}${s.abandoned ? " · заброшен" : ""}</div>` +
     `<div class="row">население ${Math.round(s.population)} · домов ${s.buildings.houses}</div>` +
     `<div class="row">угодья: ${ownedResources(world, s) || "нет"}</div>` +
-    (links ? `<div class="row">дороги: ${links}</div>` : "") +
-    needs +
-    `<div class="row market">рынок: ${marketPrices(s).map((p) => `${RESOURCE_NAMES[p.resource]}\u00a0${p.price}`).join(" · ")}</div>`
+    `<div class="row market">${needs}</div>` +
+    trip +
+    `<div class="row market">${here ? "рынок (клик — купить): " : "рынок: "}${market}</div>` +
+    (here ? `<div class="row">капитал ${money(p.capital)} · груз: ${cargoLine(p)}</div>` : "") +
+    (here ? `<button class="sell-all" type="button">продать всё</button>` : "") +
+    (links ? `<div class="row market">дороги: ${links}</div>` : "")
   );
 }
 
-export function showSettlement(world: World, s: Settlement | null): void {
+export function showSettlement(world: World, s: Settlement | null, p: Player): void {
   const body = document.getElementById("deals-body");
   if (!body) return;
-  body.innerHTML = s ? settlementCardHtml(world, s) : DEFAULT_DEALS_HTML;
+  body.innerHTML = s ? settlementCardHtml(world, s, p) : playerPanelHtml(world, p);
 }
 
 export function pushEvent(text: string): void {

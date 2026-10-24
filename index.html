@@ -41,13 +41,22 @@
       }
       #strip > section { display: flex; flex-direction: column; min-width: 0; padding: 10px 14px; }
       #feed { flex: 1 1 58%; border-right: 1px solid rgba(140,160,220,.18); }
-      #deals { flex: 1 1 42%; }
+      #deals { flex: 1 1 42%; overflow-y: auto; }   /* the town card can outgrow the strip */
       .head { color: #ffd76e; font-size: 14px; margin-bottom: 6px; }
       .row { color: #8f9ac4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       /* the price list is long: wrap it instead of clipping, two lines fit the strip */
       .row.market { white-space: normal; line-height: 1.45; }
       .row b { color: #cdd6ff; font-weight: 600; }
       .note { color: #59618a; margin-top: auto; }
+      /* market prices and roads are clickable in the deals card */
+      .buy, .go, .sell-all {
+        font: inherit; color: #cdd6ff; cursor: pointer;
+        background: rgba(140,160,220,.12); border: 1px solid rgba(140,160,220,.3);
+        border-radius: 4px; padding: 1px 6px; margin: 2px 2px 0 0;
+      }
+      .buy:hover, .go:hover, .sell-all:hover { background: rgba(255,215,110,.18); border-color: rgba(255,215,110,.55); }
+      .buy:disabled, .go:disabled { opacity: .4; cursor: default; }
+      .sell-all { margin-top: 4px; }
       #start {
         position: fixed; inset: 0; z-index: 10;
         display: flex; align-items: center; justify-content: center;
